@@ -26,6 +26,14 @@ const EXT_BY_MIME: Record<string, string> = {
   "image/heic": ".heic", // iPhone-Foto; Anzeige je nach Browser
   "image/heif": ".heif",
   "application/pdf": ".pdf",
+  // Office-Formate für Verwaltungs-Dokumente (Angebote, Scans, Listen …)
+  "application/msword": ".doc",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document": ".docx",
+  "application/vnd.ms-excel": ".xls",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": ".xlsx",
+  "application/zip": ".zip",
+  "text/plain": ".txt",
+  "text/csv": ".csv",
 };
 
 const MIME_BY_EXT: Record<string, string> = {
@@ -36,6 +44,13 @@ const MIME_BY_EXT: Record<string, string> = {
   ".heic": "image/heic",
   ".heif": "image/heif",
   ".pdf": "application/pdf",
+  ".doc": "application/msword",
+  ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  ".xls": "application/vnd.ms-excel",
+  ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  ".zip": "application/zip",
+  ".txt": "text/plain",
+  ".csv": "text/csv",
 };
 
 export class UploadError extends Error {
@@ -48,7 +63,7 @@ export async function saveUpload(
   mimetype: string,
 ): Promise<string> {
   const ext = EXT_BY_MIME[mimetype];
-  if (!ext) throw new UploadError("Dateityp nicht erlaubt (JPG, PNG, WebP, HEIC oder PDF)");
+  if (!ext) throw new UploadError("Dateityp nicht erlaubt (JPG, PNG, WebP, HEIC, PDF, Word, Excel, ZIP oder TXT)");
   if (buffer.byteLength > MAX_FILE_BYTES) throw new UploadError("Datei zu gross (max. 8 MB)");
   await mkdir(dir, { recursive: true });
   // Zeitstempel-Praefix + kurze UUID: eindeutig, grob chronologisch sortierbar,

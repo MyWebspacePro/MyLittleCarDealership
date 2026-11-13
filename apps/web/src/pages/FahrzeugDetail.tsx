@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import { Link, useParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -235,6 +235,8 @@ export default function FahrzeugDetail() {
   const [pageError, setPageError] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const [docKind, setDocKind] = useState<DocumentKind>("SONSTIGES");
+  const [docStatus, setDocStatus] = useState<{ kind: "ok" | "error" | "loading"; text: string } | null>(null);
+  const docInputRef = useRef<HTMLInputElement>(null);
   const [woModalOpen, setWoModalOpen] = useState(false);
   const [woEditing, setWoEditing] = useState<WorkOrder | null>(null);
   const [woForm, setWoForm] = useState<WorkOrderForm>(emptyWorkOrderForm());
@@ -435,8 +437,15 @@ export default function FahrzeugDetail() {
       body.append("kind", payload.kind);
       return api(`/vehicles/${id}/documents`, { method: "POST", body });
     },
-    onSuccess: invalidate,
-    onError: (err: Error) => setPageError(err.message),
+    onSuccess: async (_doc, payload) => {
+      setDocStatus({ kind: "ok", text: `«${payload.file.name}» wurde hochgeladen.` });
+      window.setTimeout(() => setDocStatus(null), 4000);
+      await invalidate();
+    },
+    onError: (err: Error) => {
+      setDocStatus({ kind: "error", text: `Upload fehlgeschlagen: ${err.message}` });
+      setPageError(err.message);
+    },
   });
 
   const docDeleteMutation = useMutation({
@@ -1009,30 +1018,36 @@ export default function FahrzeugDetail() {
                       </option>
                     ))}
                   </Select>
-                  <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg bg-slate-900 px-3 py-2 text-xs font-medium text-white hover:bg-slate-800">
-                    <Upload size={14} /> Dokument hochladen
-                    <input
-                      type="file"
-                      accept="image/*,.pdf"
-                      className="hidden"
-                      onChange={(e) => {
-                        const file = e.target.files?.[0];
-                        if (!file) return;
-                        if (file.size > 8 * 1024 * 1024) {
-                          setPageError("Datei grösser als 8 MB.");
-                          return;
-                        }
-                        docUploadMutation.mutate({ file, kind: docKind });
-                        e.target.value = "";
-                      }}
-                    />
-                  </label>
+                  <button
+                    type="button"
+                    onClick={() => docInputRef.current?.click()}
+                    className="inline-flex items-center gap-2 rounded-lg bg-slate-900 px-3 py-2 text-xs font-medium text-white hover:bg-slate-800"
+                  >
+                    <Upload size={14} /> {docStatus?.kind === "loading" ? "Lädt hoch …" : "Dokument hochladen"}
+                  </button>
+                  <input
+                    ref={docInputRef}
+                    type="file"
+                    accept="image/*,.pdf"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      e.target.value = "";
+                      if (!file) return;
+                      if (file.size > 8 * 1024 * 1024) {
+                        setDocStatus({ kind: "error", text: "Datei zu gross — max. 8 MB pro Dokument." });
+                        return;
+                      }
+                      setDocStatus({ kind: "loading", text: "" });
+                      docUploadMutation.mutate({ file, kind: docKind });
+                    }}
+                  />
                 </div>
               }
             />
             <div className="divide-y divide-slate-100 px-5 py-2">
               {vehicle.documents.length === 0 ? (
-                <p className="py-6 text-center text-sm text-slate-500">Noch keine Dokumente (PDF oder Bild, max. 8 MB).</p>
+                <p className="py-6 text-center text-sm text-slate-500">Noch keine Dokumente (JPG, PDF, Word, Excel … — max. 8 MB).</p>
               ) : (
                 vehicle.documents.map((doc) => (
                   <div key={doc.id} className="flex items-center justify-between gap-3 py-2.5">
