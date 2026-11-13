@@ -13,6 +13,8 @@ import { settingsRoutes } from "./modules/settings.routes.js";
 import { contactRoutes } from "./modules/contacts.routes.js";
 import { vehicleRoutes } from "./modules/vehicles.routes.js";
 import { purchaseRoutes } from "./modules/purchases.routes.js";
+import { documentRoutes } from "./modules/documents.routes.js";
+import { leadRoutes } from "./modules/leads.routes.js";
 import { mediaRoutes } from "./modules/media.routes.js";
 
 export async function buildApp() {
@@ -87,6 +89,8 @@ export async function buildApp() {
   await app.register(contactRoutes, { prefix: "/api" });
   await app.register(vehicleRoutes, { prefix: "/api" });
   await app.register(purchaseRoutes, { prefix: "/api" });
+  await app.register(documentRoutes, { prefix: "/api" });
+  await app.register(leadRoutes, { prefix: "/api" });
 
   return app;
 }

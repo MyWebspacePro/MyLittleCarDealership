@@ -1,10 +1,11 @@
 import { NavLink, Outlet } from "react-router-dom";
-import { Car, CarFront, LayoutDashboard, LogOut, Settings, UserRound, Users, UsersRound } from "lucide-react";
+import { Car, CarFront, Inbox, LayoutDashboard, LogOut, Settings, UserRound, Users, UsersRound } from "lucide-react";
 import { useAuth } from "../lib/auth";
 import { ROLE_LABELS } from "../lib/types";
 
 const navigation = [
   { to: "/", label: "Übersicht", icon: LayoutDashboard, end: true },
+  { to: "/posteingang", label: "Posteingang", icon: Inbox, end: false },
   { to: "/fahrzeuge", label: "Fahrzeuge", icon: CarFront, end: false },
   { to: "/kunden", label: "Kunden", icon: UsersRound, end: false },
   { to: "/users", label: "Team", icon: Users, end: false },

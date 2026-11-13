@@ -27,15 +27,29 @@ export class ApiError extends Error {
   }
 }
 
-async function refreshAccess(): Promise<boolean> {
-  const res = await fetch("/api/auth/refresh", {
-    method: "POST",
-    credentials: "include", // Refresh-Cookie mitschicken
-  });
-  if (!res.ok) return false;
-  const data = await res.json();
-  setAccessToken(data.accessToken);
-  return true;
+// Single-Flight-Refresh: Parallel laufende 401-Retries (z. B. React
+// StrictMode doppel-mountet den Auth-Effekt, mehrere Queries gleichzeitig)
+// teilen sich EINEN /auth/refresh. Ein zweiter Aufruf mit demselben Cookie
+// würde die gerade rotierte Session treffen -> Diebstahl-Erkennung -> alle
+// Sessions gesperrt.
+let refreshInFlight: Promise<boolean> | null = null;
+
+function refreshAccess(): Promise<boolean> {
+  if (!refreshInFlight) {
+    refreshInFlight = (async () => {
+      const res = await fetch("/api/auth/refresh", {
+        method: "POST",
+        credentials: "include", // Refresh-Cookie mitschicken
+      });
+      if (!res.ok) return false;
+      const data = await res.json();
+      setAccessToken(data.accessToken);
+      return true;
+    })().finally(() => {
+      refreshInFlight = null;
+    });
+  }
+  return refreshInFlight;
 }
 
 export async function api<T>(path: string, options: RequestInit = {}, retry = true): Promise<T> {

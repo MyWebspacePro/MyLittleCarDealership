@@ -7,6 +7,7 @@ import FahrzeugDetail from "./pages/FahrzeugDetail";
 import Fahrzeuge from "./pages/Fahrzeuge";
 import Kunden from "./pages/Kunden";
 import Login from "./pages/Login";
+import Posteingang from "./pages/Posteingang";
 import Profile from "./pages/Profile";
 import Settings from "./pages/Settings";
 import Users from "./pages/Users";
@@ -30,6 +31,7 @@ export default function App() {
       <Route path="/login" element={<Login />} />
       <Route element={<Protected />}>
         <Route index element={<Dashboard />} />
+        <Route path="posteingang" element={<Posteingang />} />
         <Route path="fahrzeuge" element={<Fahrzeuge />} />
         <Route path="fahrzeuge/:id" element={<FahrzeugDetail />} />
         <Route path="kunden" element={<Kunden />} />

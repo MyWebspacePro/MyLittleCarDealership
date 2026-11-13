@@ -1,10 +1,10 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
-import { ArrowUpRight, Building2, Settings, ShieldCheck, UserRound, Users } from "lucide-react";
+import { ArrowUpRight, Building2, CarFront, Inbox, Settings, ShieldCheck, UserRound, Users } from "lucide-react";
 import { useAuth } from "../lib/auth";
 import { api } from "../lib/api";
 import { Card, CardHeader, RoleBadge, Spinner } from "../components/ui";
-import { ROLES, type Setting, type User } from "../lib/types";
+import { ROLES, type LeadListItem, type Setting, type User, type VehicleListItem } from "../lib/types";
 
 const quickLinks = [
   { to: "/users", label: "Team verwalten", description: "Benutzer, Rollen und Zugänge", icon: Users },
@@ -22,8 +22,19 @@ export default function Dashboard() {
     queryKey: ["settings"],
     queryFn: () => api<Setting>("/settings"),
   });
+  const { data: leads } = useQuery({
+    queryKey: ["leads"],
+    queryFn: () => api<LeadListItem[]>("/leads"),
+  });
+  const { data: vehicles } = useQuery({
+    queryKey: ["vehicles"],
+    queryFn: () => api<VehicleListItem[]>("/vehicles"),
+  });
 
   const loading = usersLoading || settingsLoading;
+  const newLeads = (leads ?? []).filter((l) => l.status === "NEU").length;
+  const forSale = (vehicles ?? []).filter((v) => v.status === "VERKAUF").length;
+  const inPrep = (vehicles ?? []).filter((v) => v.status === "AUFBEREITUNG" || v.status === "GEKAUFT").length;
   const active = users?.filter((u) => u.active).length ?? 0;
   const roleCount = (role: string) => users?.filter((u) => u.role === role).length ?? 0;
   const date = new Date().toLocaleDateString("de-CH", {
@@ -91,6 +102,34 @@ export default function Dashboard() {
           </Card>
         </div>
       )}
+
+      <div className="grid gap-4 md:grid-cols-2">
+        <Link to="/posteingang" className="group">
+          <Card className="h-full p-5 transition-colors group-hover:border-amber-300">
+            <div className="flex items-center justify-between">
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Posteingang Ankauf</p>
+              <Inbox size={18} className="text-slate-400" />
+            </div>
+            <p className={`mt-3 text-3xl font-semibold ${newLeads > 0 ? "text-amber-600" : "text-slate-900"}`}>{newLeads}</p>
+            <p className="mt-1 text-xs text-slate-500">
+              neue Ankaufsanfragen — Web-Formular, WhatsApp und E-Mail {newLeads > 0 ? "· prüfen!" : ""}
+            </p>
+          </Card>
+        </Link>
+
+        <Link to="/fahrzeuge" className="group">
+          <Card className="h-full p-5 transition-colors group-hover:border-amber-300">
+            <div className="flex items-center justify-between">
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Fahrzeugbestand</p>
+              <CarFront size={18} className="text-slate-400" />
+            </div>
+            <p className="mt-3 text-3xl font-semibold text-slate-900">{vehicles?.length ?? 0}</p>
+            <p className="mt-1 text-xs text-slate-500">
+              {forSale} im Verkauf · {inPrep} in Aufbereitung
+            </p>
+          </Card>
+        </Link>
+      </div>
 
       <Card>
         <CardHeader title="Schnellzugriff" description="Die wichtigsten Bereiche auf einen Blick." />

@@ -86,6 +86,12 @@ async function ensurePurchase(
   return deal;
 }
 
+async function ensureLead(key: { sellerPhone: string; make: string }, data: Record<string, unknown>) {
+  const existing = await prisma.purchaseLead.findFirst({ where: { sellerPhone: key.sellerPhone, make: key.make } });
+  if (existing) return existing;
+  return prisma.purchaseLead.create({ data });
+}
+
 async function main() {
   const max = await ensureContact({
     email: "max.muster@example.ch",
@@ -239,9 +245,47 @@ async function main() {
     description: "Telefonische Anfrage von Herrn Muster — Bewertung ausstehend.",
   });
 
+  // Posteingang: unverbundene Ankaufsanfragen (Erstkontakt).
+  await ensureLead(
+    { sellerPhone: "+41 79 345 67 89", make: "Skoda" },
+    {
+      status: "NEU",
+      channel: "WHATSAPP",
+      sellerName: "Ruedi Keller",
+      sellerPhone: "+41 79 345 67 89",
+      sellerEmail: "ruedi.keller@example.ch",
+      make: "Skoda",
+      model: "Octavia",
+      variant: "1.5 TSI Ambition",
+      mileageKm: 58000,
+      year: 2020,
+      askingPrice: 12500,
+      message:
+        "Verkaufe wegen Neukauf. Serviceheft vollständig, eine Hand. Kleinere Kratzer hinten links (Fotos im Chat). Fahrzeugausweis schicke ich bei Interesse zu.",
+    },
+  );
+  await ensureLead(
+    { sellerPhone: "+41 79 456 78 90", make: "Toyota" },
+    {
+      status: "GEPRUEFT",
+      channel: "EMAIL",
+      sellerName: "Sandra Beispiel",
+      sellerPhone: "+41 79 456 78 90",
+      sellerEmail: "sandra.beispiel@example.ch",
+      make: "Toyota",
+      model: "Yaris",
+      variant: "1.5 Hybrid Trend",
+      mileageKm: 71000,
+      year: 2019,
+      askingPrice: 11000,
+      message: "Zweitwagen, Garagenwagen, immer Werkstattserviced. Probefahrt gerne nach Absprache.",
+    },
+  );
+
   console.log("Demo-Daten bereit:");
   console.log(`  Kontakte:   max.muster@example.ch, petra.beispiel@example.ch, fleet@musterlogistik.ch`);
   console.log(`  Fahrzeuge:  Golf (VERKAUF), BMW 320d (AUFBEREITUNG), Fiat 500 (KALKULATION), A3 (ANGEFRAGT)`);
+  console.log(`  Posteingang: 2 offene Ankaufsanfragen (WhatsApp, E-Mail)`);
 }
 
 main()

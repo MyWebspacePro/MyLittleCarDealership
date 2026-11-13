@@ -129,6 +129,7 @@ const vehicleDetailInclude = {
   workOrders: { orderBy: { createdAt: "desc" as const } },
   inquiries: { orderBy: { createdAt: "desc" as const } },
   appointments: { orderBy: { startsAt: "desc" as const } },
+  generatedDocuments: { orderBy: { createdAt: "desc" as const } },
 } satisfies Prisma.VehicleInclude;
 
 type VehicleDetailRow = Prisma.VehicleGetPayload<{ include: typeof vehicleDetailInclude }>;
@@ -273,6 +274,13 @@ function serializeVehicleDetail(v: VehicleDetailRow) {
       endsAt: a.endsAt,
       status: a.status,
       notes: a.notes,
+    })),
+    generatedDocuments: v.generatedDocuments.map((d) => ({
+      id: d.id,
+      vehicleId: d.vehicleId,
+      documentType: d.documentType,
+      title: d.title,
+      createdAt: d.createdAt,
     })),
   };
 }

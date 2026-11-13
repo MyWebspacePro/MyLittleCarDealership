@@ -298,6 +298,7 @@ export interface VehicleDetail extends VehicleBase {
   documents: VehicleDocument[];
   purchase: PurchaseDeal | null;
   sale: SaleDeal | null;
+  generatedDocuments: GeneratedDocumentInfo[];
   workOrders: {
     id: string;
     vehicleId: string;
@@ -346,3 +347,89 @@ export function formatDate(value: string | null | undefined): string {
   if (!value) return "–";
   return new Intl.DateTimeFormat("de-CH", { dateStyle: "medium" }).format(new Date(value));
 }
+
+// ── Ankauf: Posteingang (Leads) ──────────────────────────────────────────────
+
+export type LeadStatus = "NEU" | "GEPRUEFT" | "UEBERNOMMEN" | "VERWORFEN";
+
+export const LEAD_STATUS_LABELS: Record<LeadStatus, string> = {
+  NEU: "Neu",
+  GEPRUEFT: "Geprüft",
+  UEBERNOMMEN: "Übernommen",
+  VERWORFEN: "Verworfen",
+};
+
+export const LEAD_STATUS_STYLES: Record<LeadStatus, string> = {
+  NEU: "bg-amber-50 text-amber-700 ring-amber-200",
+  GEPRUEFT: "bg-blue-50 text-blue-700 ring-blue-200",
+  UEBERNOMMEN: "bg-emerald-50 text-emerald-700 ring-emerald-200",
+  VERWORFEN: "bg-rose-50 text-rose-700 ring-rose-200",
+};
+
+export const LEAD_STATUSES = Object.keys(LEAD_STATUS_LABELS) as LeadStatus[];
+
+export type LeadFileKind = "FOTO" | "FAHRZEUGAUSWEIS" | "SONSTIGES";
+
+export const LEAD_FILE_KIND_LABELS: Record<LeadFileKind, string> = {
+  FOTO: "Foto",
+  FAHRZEUGAUSWEIS: "Fahrzeugausweis",
+  SONSTIGES: "Sonstiges",
+};
+
+export interface LeadFile {
+  id: string;
+  leadId: string;
+  kind: LeadFileKind;
+  filename: string;
+  originalName: string | null;
+  createdAt: string;
+}
+
+export interface PurchaseLead {
+  id: string;
+  status: LeadStatus;
+  channel: PurchaseChannel;
+  sellerName: string | null;
+  sellerPhone: string | null;
+  sellerEmail: string | null;
+  make: string | null;
+  model: string | null;
+  variant: string | null;
+  mileageKm: number | null;
+  year: number | null;
+  askingPrice: number | null;
+  message: string | null;
+  assignedToId: string | null;
+  vehicleId: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface LeadListItem extends PurchaseLead {
+  photoCount: number;
+  documentCount: number;
+  vehicle: { id: string; make: string; model: string; status: VehicleStatus } | null;
+  assignedTo: { name: string } | null;
+}
+
+export interface LeadDetail extends LeadListItem {
+  files: LeadFile[];
+}
+
+export interface GeneratedDocumentInfo {
+  id: string;
+  vehicleId: string | null;
+  documentType: "ANKAUF_ANGEBOT" | "ANKAUF_VERTRAG" | "KAUFVERTRAG" | "RECHNUNG" | "TAFAEL" | "ZUSAMMENFASSUNG" | "SONSTIGES";
+  title: string;
+  createdAt: string;
+}
+
+export const GENERATED_DOC_LABELS: Record<GeneratedDocumentInfo["documentType"], string> = {
+  ANKAUF_ANGEBOT: "Ankaufsangebot",
+  ANKAUF_VERTRAG: "Ankaufsvertrag",
+  KAUFVERTRAG: "Kaufvertrag",
+  RECHNUNG: "Rechnung",
+  TAFAEL: "A3-Tafel",
+  ZUSAMMENFASSUNG: "Verkaufszusammenfassung",
+  SONSTIGES: "Sonstiges",
+};

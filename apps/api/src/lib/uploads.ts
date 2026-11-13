@@ -9,6 +9,11 @@ import { randomUUID } from "node:crypto";
 export const UPLOADS_DIR = process.env.UPLOADS_DIR ?? path.resolve(process.cwd(), "uploads");
 export const PHOTOS_DIR = path.join(UPLOADS_DIR, "photos");
 export const DOCS_DIR = path.join(UPLOADS_DIR, "docs");
+// Lead-Posteingang: Fotos öffentlich, Fahrzeugausweis & sonstige Belege privat.
+export const LEADS_PHOTOS_DIR = path.join(UPLOADS_DIR, "leads", "photos");
+export const LEADS_DOCS_DIR = path.join(UPLOADS_DIR, "leads", "docs");
+// Server-generierte PDFs (Angebote, Verträge, Rechnungen, Tafeln …) — privat.
+export const DOCUMENTS_DIR = path.join(UPLOADS_DIR, "documents");
 
 export const MAX_FILE_BYTES = 8 * 1024 * 1024; // 8 MB pro Datei
 
@@ -46,6 +51,14 @@ export async function saveUpload(
   await mkdir(dir, { recursive: true });
   // Zeitstempel-Praefix + kurze UUID: eindeutig, grob chronologisch sortierbar,
   // nie dasselbe Ziel wie eine bestehende Datei (Cache-freundlich).
+  const filename = `${Date.now().toString(36)}-${randomUUID().slice(0, 8)}${ext}`;
+  await writeFile(path.join(dir, filename), buffer);
+  return filename;
+}
+
+/** Server-generierte Datei (z. B. PDF) mit fester Endung ablegen. */
+export async function saveGeneratedFile(dir: string, buffer: Buffer, ext = ".pdf"): Promise<string> {
+  await mkdir(dir, { recursive: true });
   const filename = `${Date.now().toString(36)}-${randomUUID().slice(0, 8)}${ext}`;
   await writeFile(path.join(dir, filename), buffer);
   return filename;

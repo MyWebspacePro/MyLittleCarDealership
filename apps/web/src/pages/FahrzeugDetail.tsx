@@ -2,13 +2,14 @@ import { useEffect, useMemo, useState } from "react";
 import type { FormEvent } from "react";
 import { Link, useParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, ArrowLeftSquare, ArrowRightSquare, Download, ExternalLink, Info, Plus, Save, Trash2, Upload } from "lucide-react";
+import { ArrowLeft, ArrowLeftSquare, ArrowRightSquare, Download, ExternalLink, FileText, Info, Plus, Save, Trash2, Upload } from "lucide-react";
 import { api, apiDownload } from "../lib/api";
 import {
   chf,
   formatDate,
   DOCUMENT_KINDS,
   DOCUMENT_KIND_LABELS,
+  GENERATED_DOC_LABELS,
   PURCHASE_CHANNELS,
   PURCHASE_CHANNEL_LABELS,
   PURCHASE_PAYMENT_LABELS,
@@ -21,6 +22,7 @@ import {
   VEHICLE_STATUS_STYLES,
   type ContactListItem,
   type DocumentKind,
+  type GeneratedDocumentInfo,
   type PurchaseDeal,
   type PurchasePaymentMethod,
   type PurchaseStatus,
@@ -272,6 +274,18 @@ export default function FahrzeugDetail() {
     onSuccess: () => invalidate(),
     onError: (err: Error) => setPageError(err.message),
   });
+
+  // PDF-Erzeugung: erzeugt das Dokument serverseitig und startet den Download.
+  function pdfMutation(endpoint: "offer-pdf" | "contract-pdf") {
+    return useMutation({
+      mutationFn: () => api<GeneratedDocumentInfo>(`/purchases/${vehicle?.purchase?.id}/${endpoint}`, { method: "POST" }),
+      onSuccess: (doc) => apiDownload(`/documents/${doc.id}`, `${doc.title}.pdf`),
+      onError: (err: Error) => setPageError(err.message),
+    });
+  }
+
+  const offerPdfMutation = pdfMutation("offer-pdf");
+  const contractPdfMutation = pdfMutation("contract-pdf");
 
   // Live-Kalkulation (Spiegel der Server-Logik).
   const calc = useMemo(() => {
@@ -827,6 +841,68 @@ export default function FahrzeugDetail() {
                     <Save size={15} /> {savePurchaseMutation.isPending ? "Speichern …" : "Kalkulation speichern"}
                   </Button>
                 </div>
+              </div>
+            </Card>
+
+            <Card>
+              <CardHeader
+                title="Dokumente zum Ankauf"
+                description="Ankaufsangebot (nur der Ankaufspreis) und Ankaufsvertrag (MWST-Beleg: Typ, Stammnummer, Datum, Verkäufer-Adresse)."
+                actions={
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      disabled={offerPdfMutation.isPending || purchaseForm?.paymentMethod === "EINTAUSCH" || !purchaseForm?.purchasePrice}
+                      title={
+                        purchaseForm?.paymentMethod === "EINTAUSCH"
+                          ? "Bei Eintausch entfällt das separate Ankaufsangebot"
+                          : !purchaseForm?.purchasePrice
+                            ? "Erst einen Ankaufspreis erfassen"
+                            : "Ankaufsangebot als PDF erstellen"
+                      }
+                      onClick={() => offerPdfMutation.mutate()}
+                    >
+                      <FileText size={14} /> {offerPdfMutation.isPending ? "Erstellt …" : "Angebot als PDF"}
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      disabled={contractPdfMutation.isPending || !purchaseForm?.purchasePrice}
+                      title={!purchaseForm?.purchasePrice ? "Erst einen Ankaufspreis erfassen" : "Ankaufsvertrag als PDF erstellen"}
+                      onClick={() => contractPdfMutation.mutate()}
+                    >
+                      <FileText size={14} /> {contractPdfMutation.isPending ? "Erstellt …" : "Ankaufsvertrag als PDF"}
+                    </Button>
+                  </div>
+                }
+              />
+              <div className="divide-y divide-slate-100 px-5 py-2">
+                {(vehicle.generatedDocuments ?? [])
+                  .filter((d) => d.documentType === "ANKAUF_ANGEBOT" || d.documentType === "ANKAUF_VERTRAG")
+                  .map((d) => (
+                    <div key={d.id} className="flex items-center justify-between gap-3 py-2.5">
+                      <div className="flex min-w-0 items-center gap-2">
+                        <Badge className="bg-slate-100 text-slate-600 ring-slate-200">{GENERATED_DOC_LABELS[d.documentType]}</Badge>
+                        <span className="truncate text-sm text-slate-700">{d.title}</span>
+                        <span className="text-[11px] text-slate-400">{formatDate(d.createdAt)}</span>
+                      </div>
+                      <button
+                        type="button"
+                        title="PDF herunterladen"
+                        onClick={() => apiDownload(`/documents/${d.id}`, `${d.title}.pdf`)}
+                        className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+                      >
+                        <Download size={15} />
+                      </button>
+                    </div>
+                  ))}
+                {(vehicle.generatedDocuments ?? []).filter((d) => d.documentType === "ANKAUF_ANGEBOT" || d.documentType === "ANKAUF_VERTRAG")
+                  .length === 0 ? (
+                  <p className="py-4 text-sm text-slate-500">
+                    Noch keine Dokumente erstellt. Sobald ein Ankaufspreis steht, kannst du Angebot und Vertrag als PDF erzeugen.
+                  </p>
+                ) : null}
               </div>
             </Card>
           </form>

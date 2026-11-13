@@ -1,6 +1,6 @@
 # Projekt-Status
 
-Stand: 13.11.2026 (Phase A der Schaltzentrale)
+Stand: 13.11.2026 (Phase B der Schaltzentrale)
 
 ## Live
 
@@ -36,10 +36,30 @@ Stand: 13.11.2026 (Phase A der Schaltzentrale)
 - Demo-Seed `prisma/seed-demo.ts` (4 Fahrzeuge in verschiedenen Stadien,
   3 Kontakte) — lokal wie VPS identisch (`npm run db:seed-demo` im API-Workspace)
 
-## Offen / als Nächstes (Phasen B–G)
+## Phase B — Ankauf (13.11.2026)
 
-- **B Ankauf**: Lead-Posteingang, Angebots-PDF (nur Ankaufspreis), Ankaufsvertrag-PDF
-  (MWST-Belegpflichten: Typ, Stammnummer, Datum, Verkäufer-Adresse), Eintausch-Verrechnung
+- **Posteingang**: Ankaufsanfragen aus Web-Formular/WhatsApp/E-Mail als Leads —
+  Kontaktdaten, Fahrzeugangaben, Preisvorstellung, Erstkontakt-Notiz; Foto-Uploads
+  (öffentlich ausgeliefert) und Fahrzeugausweis/Belege (nur authentifiziert)
+- **Übernehmen**: Lead wird zu Kontakt (neu oder bestehend) + Fahrzeug + Ankaufsvorgang;
+  Fotos wandern in die Fahrzeugfotos, Fahrzeugausweis in die Verwaltungs-Dokumente
+- **Angebots-PDF**: nur der Ankaufspreis sichtbar (keine Kosten, kein Gewinn), Gültigkeit
+  14 Tage; bei Eintausch bewusst nicht verfügbar (Verrechnung im Verkauf)
+- **Ankaufsvertrag-PDF**: Parteien, § 1 Vertragsgegenstand, § 2 Kaufpreis/Zahlung,
+  § 3 Übergabe (Fahrzeugausweis/Serviceheft/Schlüssel/Kontrollscheibe, Abmeldung),
+  § 4 Zustand & Gewährleistung (Standardtext «wie besichtigt», überschreibbar über
+  Einstellungen), § 5 Schlusserklärung — erfüllt die MWST-Belegpflichten nach
+  Art. 38 MWSTG (Typ, Stammnummer, Datum, Name/Adresse des Verkäufers); bei
+  Eintausch als Übernahmebestätigung mit Abzugsposten-Hinweis
+- Dokumente werden archiviert (GeneratedDocument) und sind aus dem Ankauf-Tab
+  herunterladbar; Dashboard mit Posteingang- und Bestand-Karte
+- **Fix**: Single-Flight-Refresh im API-Client — parallele 401-Retries (React
+  StrictMode) teilen sich einen /auth/refresh; davor konnte die Doppel-Refresh-Race
+  die Session-Rotation als Diebstahl werten und alle Sessions sperren
+
+## Offen / als Nächstes (Phasen C–G)
+
+- **B Ankauf** ✓ (13.11.2026): Leads, Übernehmen, Angebots-/Ankaufsvertrag-PDF, Eintausch
 - **C Aufbereitung**: Aufträge (intern / Markenwerkstatt / Partnerwerkstatt / extern /
   Aufbereiter), Ist-Kosten fliessen in die Kalkulation zurück
 - **D Verkauf-Frontend**: Exposé + AS24-Vorbereitung (kopierfertig), A3-Tafel-PDF mit QR,
