@@ -173,7 +173,30 @@ export const VALUATION_KINDS = Object.keys(VALUATION_KIND_LABELS) as ValuationKi
 
 export type SalePaymentMethod = "BAR" | "UEBERWEISUNG" | "LEASING" | "FINANZIERUNG";
 
+export const SALE_PAYMENT_LABELS: Record<SalePaymentMethod, string> = {
+  BAR: "Barzahlung",
+  UEBERWEISUNG: "Banküberweisung",
+  LEASING: "Leasing",
+  FINANZIERUNG: "Finanzierung",
+};
+
 export type SaleStatus = "INTERESSENT" | "RESERVIERT" | "VERKAUFT" | "ABGESCHLOSSEN";
+
+export const SALE_STATUSES = ["INTERESSENT", "RESERVIERT", "VERKAUFT", "ABGESCHLOSSEN"] as SaleStatus[];
+
+export const SALE_STATUS_LABELS: Record<SaleStatus, string> = {
+  INTERESSENT: "Interessent",
+  RESERVIERT: "Reserviert",
+  VERKAUFT: "Verkauft",
+  ABGESCHLOSSEN: "Abgeschlossen",
+};
+
+export const SALE_STATUS_STYLES: Record<SaleStatus, string> = {
+  INTERESSENT: "bg-slate-100 text-slate-600",
+  RESERVIERT: "bg-amber-100 text-amber-700",
+  VERKAUFT: "bg-emerald-100 text-emerald-700",
+  ABGESCHLOSSEN: "bg-indigo-100 text-indigo-700",
+};
 
 export type DocumentKind = "FAHRZEUGAUSWEIS" | "SERVICEHEFT" | "BERICHT" | "SONSTIGES";
 
@@ -215,6 +238,42 @@ export interface PurchaseDeal {
   updatedAt: string;
 }
 
+export interface SaleAddon {
+  id: string;
+  name: string;
+  provider: string | null;
+  price: number | null;
+}
+
+export interface PaymentInfo {
+  id: string;
+  direction: "EINGANG" | "AUSGANG";
+  amount: number;
+  method: string | null;
+  paidAt: string;
+  notes: string | null;
+  gwgIdentifiedAt: string | null;
+  gwgIdDocument: string | null;
+}
+
+export interface InvoiceInfo {
+  id: string;
+  number: string;
+  status: InvoiceStatus;
+  subject: string | null;
+  isCredit: boolean;
+  reason: string | null;
+  totalAmount: number | null;
+  vatAmount: number | null;
+  issuedAt: string | null;
+  dueAt: string | null;
+  reminderLevel: number;
+  reminderDueAt: string | null;
+  qrReference: string | null;
+  vehicleTitle: string | null;
+  createdAt: string;
+}
+
 export interface SaleDeal {
   id: string;
   vehicleId: string;
@@ -224,8 +283,65 @@ export interface SaleDeal {
   salePrice: number | null;
   paymentMethod: SalePaymentMethod;
   leasingPartner: string | null;
+  leasingMonthlyRate: number | null;
+  leasingTermMonths: number | null;
+  leasingDownPayment: number | null;
+  tradeInCredit: number | null;
+  tradeInDescription: string | null;
   soldAt: string | null;
   notes: string | null;
+  addons: SaleAddon[];
+  payments: PaymentInfo[];
+  invoices: InvoiceInfo[];
+}
+
+export type InvoiceStatus = "ENTWURF" | "VERSANDT" | "TEILZAHLUNG" | "BEZAHLT" | "STORNIERT";
+
+export const INVOICE_STATUS_LABELS: Record<InvoiceStatus, string> = {
+  ENTWURF: "Entwurf",
+  VERSANDT: "Versandt",
+  TEILZAHLUNG: "Teilzahlung",
+  BEZAHLT: "Bezahlt",
+  STORNIERT: "Storniert",
+};
+
+export const INVOICE_STATUS_STYLES: Record<InvoiceStatus, string> = {
+  ENTWURF: "bg-slate-100 text-slate-600",
+  VERSANDT: "bg-sky-100 text-sky-700",
+  TEILZAHLUNG: "bg-amber-100 text-amber-700",
+  BEZAHLT: "bg-emerald-100 text-emerald-700",
+  STORNIERT: "bg-rose-100 text-rose-700",
+};
+
+export const PAYMENT_METHOD_LABELS: Record<string, string> = {
+  BAR: "Bar",
+  UEBERWEISUNG: "Überweisung",
+  LEASING: "Leasing",
+  FINANZIERUNG: "Finanzierung",
+  EINTAUSCH: "Eintausch",
+  SONSTIGES: "Sonstiges",
+};
+
+export const REMINDER_LEVEL_LABELS: Record<number, string> = {
+  0: "—",
+  1: "Erinnerung",
+  2: "1. Mahnung",
+  3: "2. Mahnung",
+};
+
+export interface ReportSummary {
+  year: number;
+  bestandswert: number;
+  umsatz: number;
+  deckungsbeitrag: {
+    vehicleId: string;
+    vehicleTitle: string;
+    purchasePrice: number | null;
+    prepCosts: number;
+    salePrice: number | null;
+    margin: number | null;
+    soldAt: string | null;
+  }[];
 }
 
 export interface VehiclePhoto {

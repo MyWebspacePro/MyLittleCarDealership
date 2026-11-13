@@ -6,8 +6,10 @@ import {
   ArrowLeft,
   ArrowLeftSquare,
   ArrowRightSquare,
+  Bell,
   Check,
   ClipboardCopy,
+  CreditCard,
   Download,
   ExternalLink,
   FileText,
@@ -19,6 +21,8 @@ import {
   Plus,
   QrCode,
   Save,
+  Send,
+  ShieldAlert,
   Trash2,
   Upload,
 } from "lucide-react";
@@ -53,6 +57,14 @@ import {
   WORK_ORDER_STATUS_STYLES,
   WORK_ORDER_TYPES,
   WORK_ORDER_TYPE_LABELS,
+  SALE_STATUSES,
+  SALE_STATUS_LABELS,
+  SALE_STATUS_STYLES,
+  SALE_PAYMENT_LABELS,
+  INVOICE_STATUS_LABELS,
+  INVOICE_STATUS_STYLES,
+  PAYMENT_METHOD_LABELS,
+  REMINDER_LEVEL_LABELS,
   type Appointment,
   type AppointmentType,
   type ContactListItem,
@@ -66,6 +78,8 @@ import {
   type PurchaseStatus,
   type PurchaseChannel,
   type Setting,
+  type SalePaymentMethod,
+  type SaleStatus,
   type ValuationItem,
   type ValuationKind,
   type VehicleDetail,
@@ -235,6 +249,50 @@ export default function FahrzeugDetail() {
   const [equipmentSaved, setEquipmentSaved] = useState(false);
   const [as24Input, setAs24Input] = useState("");
   const [boardPrice, setBoardPrice] = useState("");
+  // Verkauf-Abschluss: Verkaufsvorgang, Rechnung, Zahlungen, Mahnwesen
+  const [saleModalOpen, setSaleModalOpen] = useState(false);
+  const [saleForm, setSaleForm] = useState<{
+    buyerId: string;
+    status: SaleStatus;
+    salePrice: string;
+    paymentMethod: SalePaymentMethod;
+    leasingPartner: string;
+    leasingMonthlyRate: string;
+    leasingTermMonths: string;
+    leasingDownPayment: string;
+    tradeInCredit: string;
+    tradeInDescription: string;
+    soldAt: string;
+    notes: string;
+  }>({
+    buyerId: "",
+    status: "INTERESSENT",
+    salePrice: "",
+    paymentMethod: "UEBERWEISUNG",
+    leasingPartner: "",
+    leasingMonthlyRate: "",
+    leasingTermMonths: "",
+    leasingDownPayment: "",
+    tradeInCredit: "",
+    tradeInDescription: "",
+    soldAt: "",
+    notes: "",
+  });
+  const [addonForm, setAddonForm] = useState<{ name: string; provider: string; price: string }>({ name: "", provider: "", price: "" });
+  const [invoiceFees, setInvoiceFees] = useState<{ description: string; amount: string }>({ description: "", amount: "" });
+  const [paymentModalOpen, setPaymentModalOpen] = useState(false);
+  const [paymentForm, setPaymentForm] = useState<{ amount: string; method: string; paidAt: string; notes: string; gwgIdentifiedAt: string; gwgIdDocument: string; gwgNotes: string }>({
+    amount: "",
+    method: "UEBERWEISUNG",
+    paidAt: "",
+    notes: "",
+    gwgIdentifiedAt: "",
+    gwgIdDocument: "",
+    gwgNotes: "",
+  });
+  const [emailModalOpen, setEmailModalOpen] = useState(false);
+  const [emailDocId, setEmailDocId] = useState<string | null>(null);
+  const [emailForm, setEmailForm] = useState<{ to: string; subject: string; message: string }>({ to: "", subject: "", message: "" });
   // Anfragen & Termine
   const [inquiryModalOpen, setInquiryModalOpen] = useState(false);
   const [inquiryEditing, setInquiryEditing] = useState<Inquiry | null>(null);
@@ -293,11 +351,26 @@ export default function FahrzeugDetail() {
     }
   }, [vehicle, purchaseLoadedId]);
 
-  // Verkauf: Ausstattung und AS24-Link an die geladenen Fahrzeugdaten koppeln.
+  // Verkauf: Ausstattung, AS24-Link und Verkaufsvorgang an die Fahrzeugdaten koppeln.
   useEffect(() => {
     if (!vehicle) return;
     setEquipment(vehicle.equipment ?? []);
     setAs24Input(vehicle.as24Url ?? "");
+    const s = vehicle.sale;
+    setSaleForm({
+      buyerId: s?.buyerId ?? "",
+      status: s?.status ?? "INTERESSENT",
+      salePrice: s?.salePrice?.toString() ?? vehicle.targetSalePrice?.toString() ?? "",
+      paymentMethod: s?.paymentMethod ?? "UEBERWEISUNG",
+      leasingPartner: s?.leasingPartner ?? "",
+      leasingMonthlyRate: s?.leasingMonthlyRate?.toString() ?? "",
+      leasingTermMonths: s?.leasingTermMonths?.toString() ?? "",
+      leasingDownPayment: s?.leasingDownPayment?.toString() ?? "",
+      tradeInCredit: s?.tradeInCredit?.toString() ?? "",
+      tradeInDescription: s?.tradeInDescription ?? "",
+      soldAt: s?.soldAt ? s.soldAt.slice(0, 10) : "",
+      notes: s?.notes ?? "",
+    });
   }, [vehicle?.id]);
 
   function invalidate() {
@@ -488,6 +561,142 @@ export default function FahrzeugDetail() {
         body: JSON.stringify({ price: boardPrice || null }),
       }),
     onSuccess: (doc) => apiDownload(`/documents/${doc.id}`, `${doc.title}.pdf`),
+    onError: (err: Error) => setPageError(err.message),
+  });
+
+  // ── Verkauf-Abschluss (Phase E) ──────────────────────────────────────────
+
+  const saleNum = (v: string): number | null => (v === "" ? null : Number(v));
+
+  function saleBody(): Record<string, unknown> {
+    return {
+      buyerId: saleForm.buyerId || null,
+      status: saleForm.status,
+      salePrice: saleNum(saleForm.salePrice),
+      paymentMethod: saleForm.paymentMethod,
+      leasingPartner: saleForm.leasingPartner || null,
+      leasingMonthlyRate: saleNum(saleForm.leasingMonthlyRate),
+      leasingTermMonths: saleNum(saleForm.leasingTermMonths),
+      leasingDownPayment: saleNum(saleForm.leasingDownPayment),
+      tradeInCredit: saleNum(saleForm.tradeInCredit),
+      tradeInDescription: saleForm.tradeInDescription || null,
+      soldAt: saleForm.soldAt || null,
+      notes: saleForm.notes || null,
+    };
+  }
+
+  const saveSaleMutation = useMutation({
+    mutationFn: () => api(`/vehicles/${id}/sale`, { method: "PUT", body: JSON.stringify(saleBody()) }),
+    onSuccess: () => {
+      setSaleModalOpen(false);
+      invalidate();
+    },
+    onError: (err: Error) => setPageError(err.message),
+  });
+
+  function vehicleDocMutation(endpoint: string) {
+    return useMutation({
+      mutationFn: () => api<GeneratedDocumentInfo>(`/vehicles/${id}/${endpoint}`, { method: "POST" }),
+      onSuccess: (doc) => apiDownload(`/documents/${doc.id}`, `${doc.title}.pdf`),
+      onError: (err: Error) => setPageError(err.message),
+    });
+  }
+
+  const kaufvertragMutation = vehicleDocMutation("kaufvertrag-pdf");
+  const leasingDossierMutation = vehicleDocMutation("leasing-dossier-pdf");
+  const zusammenfassungMutation = vehicleDocMutation("zusammenfassung-pdf");
+
+  const addAddonMutation = useMutation({
+    mutationFn: () =>
+      api(`/vehicles/${id}/addons`, {
+        method: "POST",
+        body: JSON.stringify({ name: addonForm.name, provider: addonForm.provider || null, price: saleNum(addonForm.price) }),
+      }),
+    onSuccess: () => {
+      setAddonForm({ name: "", provider: "", price: "" });
+      invalidate();
+    },
+    onError: (err: Error) => setPageError(err.message),
+  });
+
+  const deleteAddonMutation = useMutation({
+    mutationFn: (addonId: string) => api(`/sale-addons/${addonId}`, { method: "DELETE" }),
+    onSuccess: invalidate,
+    onError: (err: Error) => setPageError(err.message),
+  });
+
+  const invoiceMutation = useMutation({
+    mutationFn: () => {
+      const fees =
+        invoiceFees.description && invoiceFees.amount
+          ? [{ description: invoiceFees.description, amount: Number(invoiceFees.amount) }]
+          : [];
+      return api<{ invoice: { id: string; number: string }; documentId: string }>(`/vehicles/${id}/invoice`, {
+        method: "POST",
+        body: JSON.stringify({ fees, notes: null }),
+      });
+    },
+    onSuccess: () => invalidate(),
+    onError: (err: Error) => setPageError(err.message),
+  });
+
+  const paymentMutation = useMutation({
+    mutationFn: () =>
+      api("/payments", {
+        method: "POST",
+        body: JSON.stringify({
+          saleDealId: vehicle?.sale?.id ?? null,
+          amount: Number(paymentForm.amount),
+          method: paymentForm.method,
+          paidAt: paymentForm.paidAt || null,
+          notes: paymentForm.notes || null,
+          gwgIdentifiedAt: paymentForm.gwgIdentifiedAt || null,
+          gwgIdDocument: paymentForm.gwgIdDocument || null,
+          gwgNotes: paymentForm.gwgNotes || null,
+        }),
+      }),
+    onSuccess: () => {
+      setPaymentModalOpen(false);
+      setPaymentForm({ amount: "", method: "UEBERWEISUNG", paidAt: "", notes: "", gwgIdentifiedAt: "", gwgIdDocument: "", gwgNotes: "" });
+      invalidate();
+    },
+    onError: (err: Error) => setPageError(err.message),
+  });
+
+  const deletePaymentMutation = useMutation({
+    mutationFn: (paymentId: string) => api(`/payments/${paymentId}`, { method: "DELETE" }),
+    onSuccess: invalidate,
+    onError: (err: Error) => setPageError(err.message),
+  });
+
+  const reminderMutation = useMutation({
+    mutationFn: (payload: { invoiceId: string; level: number }) =>
+      api<{ invoice: unknown; documentId: string }>(`/invoices/${payload.invoiceId}/reminder`, {
+        method: "POST",
+        body: JSON.stringify({ level: payload.level }),
+      }),
+    onSuccess: () => invalidate(),
+    onError: (err: Error) => setPageError(err.message),
+  });
+
+  const creditNoteMutation = useMutation({
+    mutationFn: (payload: { invoiceId: string; reason: string }) =>
+      api(`/invoices/${payload.invoiceId}/credit-note`, { method: "POST", body: JSON.stringify({ reason: payload.reason }) }),
+    onSuccess: () => invalidate(),
+    onError: (err: Error) => setPageError(err.message),
+  });
+
+  const emailDocMutation = useMutation({
+    mutationFn: () =>
+      api(`/documents/${emailDocId}/email`, {
+        method: "POST",
+        body: JSON.stringify({ to: emailForm.to, subject: emailForm.subject || null, message: emailForm.message || null }),
+      }),
+    onSuccess: () => {
+      setEmailModalOpen(false);
+      setEmailForm({ to: "", subject: "", message: "" });
+      setPageError(null);
+    },
     onError: (err: Error) => setPageError(err.message),
   });
 
@@ -1217,14 +1426,28 @@ export default function FahrzeugDetail() {
                         <span className="truncate text-sm text-slate-700">{d.title}</span>
                         <span className="text-[11px] text-slate-400">{formatDate(d.createdAt)}</span>
                       </div>
-                      <button
-                        type="button"
-                        title="PDF herunterladen"
-                        onClick={() => apiDownload(`/documents/${d.id}`, `${d.title}.pdf`)}
-                        className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
-                      >
-                        <Download size={15} />
-                      </button>
+                      <div className="flex items-center gap-1">
+                        <button
+                          type="button"
+                          title="PDF herunterladen"
+                          onClick={() => apiDownload(`/documents/${d.id}`, `${d.title}.pdf`)}
+                          className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+                        >
+                          <Download size={15} />
+                        </button>
+                        <button
+                          type="button"
+                          title="PDF per E-Mail versenden"
+                          onClick={() => {
+                            setEmailDocId(d.id);
+                            setEmailForm({ to: "", subject: d.title, message: "" });
+                            setEmailModalOpen(true);
+                          }}
+                          className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+                        >
+                          <Mail size={15} />
+                        </button>
+                      </div>
                     </div>
                   ))}
                 {(vehicle.generatedDocuments ?? []).filter((d) => d.documentType === "ANKAUF_ANGEBOT" || d.documentType === "ANKAUF_VERTRAG")
@@ -1510,10 +1733,245 @@ export default function FahrzeugDetail() {
             </div>
           </Card>
 
-          <Alert kind="info">
-            Der Verkaufsvorgang selbst (Kaufvertrag, Rechnung mit QR-Code, Leasing, Zahlungen, Zusammenfassungs-PDF) folgt in
-            Phase E. Anfragen und Termine werden in den eigenen Tabs protokolliert.
-          </Alert>
+          {/* ── Abschluss: Verkaufsvorgang, Zusatzleistungen, Rechnung, Zahlungen ── */}
+          <Card>
+            <CardHeader
+              title="Abschluss"
+              description="Verkaufsvorgang erfassen, dann Kaufvertrag, QR-Rechnung, Zahlungen und Zusammenfassungs-PDF."
+              actions={
+                <div className="flex flex-wrap gap-2">
+                  <Button size="sm" variant="secondary" onClick={() => setSaleModalOpen(true)}>
+                    <Pencil size={14} /> Verkaufsvorgang {vehicle.sale ? "bearbeiten" : "erfassen"}
+                  </Button>
+                </div>
+              }
+            />
+            {!vehicle.sale ? (
+              <div className="px-5 py-4">
+                <Alert kind="info">Noch kein Verkaufsvorgang — zuerst erfassen (Käufer, Preis, Zahlungsart), dann vertragsfähig.</Alert>
+              </div>
+            ) : (
+              <div className="space-y-5 px-5 py-4">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge className={`${SALE_STATUS_STYLES[vehicle.sale.status]} ring-slate-200`}>{SALE_STATUS_LABELS[vehicle.sale.status]}</Badge>
+                  <span className="text-sm font-semibold text-slate-800">
+                    {vehicle.sale.buyerName ?? "Käufer offen"} · {chf(vehicle.sale.salePrice)} · {SALE_PAYMENT_LABELS[vehicle.sale.paymentMethod]}
+                  </span>
+                  {vehicle.sale.soldAt ? <span className="text-xs text-slate-500">Verkauft am {formatDate(vehicle.sale.soldAt)}</span> : null}
+                  {vehicle.sale.tradeInCredit ? (
+                    <Badge className="bg-slate-100 text-slate-600 ring-slate-200">
+                      Eintausch-Abzug {chf(vehicle.sale.tradeInCredit)}{vehicle.sale.tradeInDescription ? ` · ${vehicle.sale.tradeInDescription}` : ""}
+                    </Badge>
+                  ) : null}
+                </div>
+
+                <div className="flex flex-wrap gap-2">
+                  <Button size="sm" onClick={() => kaufvertragMutation.mutate()} disabled={kaufvertragMutation.isPending || !vehicle.sale.salePrice || !vehicle.sale.buyerId}>
+                    <FileText size={14} /> {kaufvertragMutation.isPending ? "Erstellt …" : "Kaufvertrag als PDF"}
+                  </Button>
+                  {vehicle.sale.paymentMethod === "LEASING" ? (
+                    <Button size="sm" variant="secondary" onClick={() => leasingDossierMutation.mutate()} disabled={leasingDossierMutation.isPending}>
+                      <FileText size={14} /> Leasing-Dossier
+                    </Button>
+                  ) : null}
+                  <Button size="sm" variant="secondary" onClick={() => zusammenfassungMutation.mutate()} disabled={zusammenfassungMutation.isPending}>
+                    <Download size={14} /> Zusammenfassungs-PDF (Archiv)
+                  </Button>
+                </div>
+                {!vehicle.sale.buyerId || !vehicle.sale.salePrice ? (
+                  <p className="text-xs text-slate-500">Für den Kaufvertrag bitte Käufer und Verkaufspreis im Verkaufsvorgang erfassen.</p>
+                ) : null}
+
+                {/* Zusatzleistungen */}
+                <div className="rounded-xl border border-slate-200 p-4">
+                  <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Zusatzleistungen (fliessen in Kaufvertrag & Rechnung)</p>
+                  {vehicle.sale.addons.length ? (
+                    <ul className="mb-2 divide-y divide-slate-100">
+                      {vehicle.sale.addons.map((addon) => (
+                        <li key={addon.id} className="flex items-center justify-between py-1.5 text-sm">
+                          <span className="text-slate-700">
+                            {addon.name}
+                            {addon.provider ? <span className="text-slate-400"> · {addon.provider}</span> : null}
+                          </span>
+                          <span className="flex items-center gap-3">
+                            <span className="font-medium text-slate-800">{chf(addon.price)}</span>
+                            <button
+                              type="button"
+                              onClick={() => deleteAddonMutation.mutate(addon.id)}
+                              className="text-slate-400 transition-colors hover:text-rose-600"
+                              title="Zusatzleistung entfernen"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="mb-2 text-sm text-slate-500">Keine Zusatzleistungen (z. B. Occasionsgarantie, Pneus, Rahmenabdeckung).</p>
+                  )}
+                  <div className="flex flex-wrap items-end gap-2">
+                    <Field label="Bezeichnung">
+                      <Input value={addonForm.name} onChange={(e) => setAddonForm({ ...addonForm, name: e.target.value })} placeholder="Occasionsgarantie 12 Monate" className="w-56" />
+                    </Field>
+                    <Field label="Anbieter">
+                      <Input value={addonForm.provider} onChange={(e) => setAddonForm({ ...addonForm, provider: e.target.value })} placeholder="optional" className="w-44" />
+                    </Field>
+                    <Field label="Preis">
+                      <Input type="number" min={0} step={10} value={addonForm.price} onChange={(e) => setAddonForm({ ...addonForm, price: e.target.value })} className="w-28" />
+                    </Field>
+                    <Button size="sm" variant="secondary" onClick={() => addAddonMutation.mutate()} disabled={addAddonMutation.isPending || !addonForm.name}>
+                      <Plus size={13} /> Hinzufügen
+                    </Button>
+                  </div>
+                </div>
+
+                {/* Rechnung */}
+                <div className="rounded-xl border border-slate-200 p-4">
+                  <div className="mb-2 flex items-center justify-between">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Rechnung (Schweizer QR-Rechnung)</p>
+                    {!vehicle.sale.invoices.some((i) => !i.isCredit && i.status !== "STORNIERT" && i.status !== "BEZAHLT") ? (
+                      <div className="flex items-end gap-2">
+                        <Field label="Abgaben (MWST-frei)">
+                          <Input value={invoiceFees.description} onChange={(e) => setInvoiceFees({ ...invoiceFees, description: e.target.value })} placeholder="Kontrollscheine StVA" className="w-44" />
+                        </Field>
+                        <Field label="Betrag">
+                          <Input type="number" min={0} value={invoiceFees.amount} onChange={(e) => setInvoiceFees({ ...invoiceFees, amount: e.target.value })} className="w-24" />
+                        </Field>
+                        <Button size="sm" onClick={() => invoiceMutation.mutate()} disabled={invoiceMutation.isPending || !vehicle.sale.salePrice}>
+                          <QrCode size={14} /> {invoiceMutation.isPending ? "Erstellt …" : "Rechnung mit QR erstellen"}
+                        </Button>
+                      </div>
+                    ) : null}
+                  </div>
+                  {!settings?.qrIban ? (
+                    <p className="mb-2 text-xs text-amber-700">Hinweis: In den Stammdaten ist noch kein QR-IBAN hinterlegt — die Rechnung erscheint ohne Zahlteil.</p>
+                  ) : null}
+                  {vehicle.sale.invoices.length === 0 ? (
+                    <p className="text-sm text-slate-500">Noch keine Rechnung.</p>
+                  ) : (
+                    <ul className="divide-y divide-slate-100">
+                      {vehicle.sale.invoices.map((inv) => {
+                        const overdue = !inv.isCredit && (inv.status === "VERSANDT" || inv.status === "TEILZAHLUNG") && inv.dueAt && new Date(inv.dueAt) < new Date();
+                        return (
+                          <li key={inv.id} className="py-2.5">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className="text-sm font-semibold text-slate-800">
+                                {inv.isCredit ? "Gutschrift" : "Rechnung"} {inv.number}
+                              </span>
+                              <Badge className={`${INVOICE_STATUS_STYLES[inv.status]} ring-slate-200`}>{INVOICE_STATUS_LABELS[inv.status]}</Badge>
+                              {overdue ? <Badge className="bg-rose-50 text-rose-700 ring-rose-200">Überfällig seit {formatDate(inv.dueAt)}</Badge> : null}
+                              {inv.reminderLevel ? (
+                                <Badge className="bg-amber-50 text-amber-700 ring-amber-200">
+                                  {REMINDER_LEVEL_LABELS[inv.reminderLevel]}
+                                  {inv.reminderDueAt ? ` · Frist ${formatDate(inv.reminderDueAt)}` : ""}
+                                </Badge>
+                              ) : null}
+                              <span className="text-sm text-slate-600">{chf(inv.totalAmount)}</span>
+                              <span className="text-[11px] text-slate-400">{formatDate(inv.issuedAt)}</span>
+                              <span className="ml-auto flex items-center gap-1.5">
+                                {!inv.isCredit && inv.status !== "BEZAHLT" && inv.status !== "STORNIERT" ? (
+                                  <>
+                                    {inv.reminderLevel < 1 ? (
+                                      <Button size="sm" variant="secondary" onClick={() => reminderMutation.mutate({ invoiceId: inv.id, level: 1 })} disabled={reminderMutation.isPending}>
+                                        <Bell size={13} /> Erinnerung
+                                      </Button>
+                                    ) : null}
+                                    {inv.reminderLevel === 1 ? (
+                                      <Button size="sm" variant="secondary" onClick={() => reminderMutation.mutate({ invoiceId: inv.id, level: 2 })} disabled={reminderMutation.isPending}>
+                                        <Bell size={13} /> 1. Mahnung
+                                      </Button>
+                                    ) : null}
+                                    {inv.reminderLevel === 2 ? (
+                                      <Button size="sm" variant="secondary" onClick={() => reminderMutation.mutate({ invoiceId: inv.id, level: 3 })} disabled={reminderMutation.isPending}>
+                                        <Bell size={13} /> 2. Mahnung
+                                      </Button>
+                                    ) : null}
+                                  </>
+                                ) : null}
+                                {!inv.isCredit && inv.status !== "STORNIERT" ? (
+                                  <Button
+                                    size="sm"
+                                    variant="secondary"
+                                    onClick={() => {
+                                      const reason = window.prompt("Grund für die Gutschrift (erscheint auf dem PDF):", "");
+                                      if (reason) creditNoteMutation.mutate({ invoiceId: inv.id, reason });
+                                    }}
+                                  >
+                                    Storno / Gutschrift
+                                  </Button>
+                                ) : null}
+                                <Button size="sm" variant="secondary" onClick={() => apiDownload(`/invoices/${inv.id}/pdf`, `${inv.number}.pdf`)} title="PDF herunterladen">
+                                  <Download size={13} /> PDF
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="secondary"
+                                  onClick={() => {
+                                    setEmailDocId(null);
+                                    setEmailForm({ to: "", subject: `${inv.isCredit ? "Gutschrift" : "Rechnung"} ${inv.number}`, message: "" });
+                                    setEmailModalOpen(true);
+                                  }}
+                                  title="PDF per E-Mail versenden"
+                                >
+                                  <Mail size={13} /> Mailen
+                                </Button>
+                              </span>
+                            </div>
+                            {inv.reason ? <p className="mt-1 text-xs text-slate-500">Grund: {inv.reason}</p> : null}
+                            {inv.qrReference && !inv.isCredit ? <p className="mt-0.5 text-[11px] text-slate-400">QR-Referenz: {inv.qrReference.replace(/(.{5})/g, "$1 ").trim()}</p> : null}
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  )}
+                </div>
+
+                {/* Zahlungen */}
+                <div className="rounded-xl border border-slate-200 p-4">
+                  <div className="mb-2 flex items-center justify-between">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Zahlungen (GwG: Bar ab CHF 100'000 mit Identitätsprüfung)</p>
+                    <Button
+                      size="sm"
+                      onClick={() => {
+                        setPaymentForm({ ...paymentForm, amount: "", method: "UEBERWEISUNG", paidAt: "", notes: "" });
+                        setPaymentModalOpen(true);
+                      }}
+                    >
+                      <CreditCard size={14} /> Zahlung erfassen
+                    </Button>
+                  </div>
+                  {vehicle.sale.payments.length === 0 ? (
+                    <p className="text-sm text-slate-500">Noch keine Zahlungen erfasst.</p>
+                  ) : (
+                    <ul className="divide-y divide-slate-100">
+                      {vehicle.sale.payments.map((p) => (
+                        <li key={p.id} className="flex items-center justify-between gap-3 py-2 text-sm">
+                          <span className="text-slate-700">
+                            {formatDate(p.paidAt)} · {PAYMENT_METHOD_LABELS[p.method ?? ""] ?? p.method ?? "—"}
+                            {p.gwgIdentifiedAt ? (
+                              <Badge className="ml-1.5 bg-emerald-50 text-emerald-700 ring-emerald-200">
+                                <ShieldAlert size={11} className="mr-1 inline" /> GwG identifiziert
+                              </Badge>
+                            ) : null}
+                            {p.notes ? <span className="text-slate-400"> · {p.notes}</span> : null}
+                          </span>
+                          <span className="flex items-center gap-3">
+                            <span className={`font-medium ${p.direction === "EINGANG" ? "text-emerald-700" : "text-slate-600"}`}>
+                              {p.direction === "EINGANG" ? "+" : "−"} {chf(p.amount)}
+                            </span>
+                            <button type="button" onClick={() => deletePaymentMutation.mutate(p.id)} className="text-slate-400 transition-colors hover:text-rose-600" title="Zahlung löschen">
+                              <Trash2 size={14} />
+                            </button>
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              </div>
+            )}
+          </Card>
         </div>
       ) : null}
       {tab === "anfragen" ? (
@@ -2101,6 +2559,217 @@ export default function FahrzeugDetail() {
             </Button>
             <Button type="submit" disabled={createAppointmentMutation.isPending || updateAppointmentMutation.isPending}>
               {createAppointmentMutation.isPending || updateAppointmentMutation.isPending ? "Speichern …" : "Speichern"}
+            </Button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* Verkaufsvorgang erfassen / bearbeiten */}
+      <Modal
+        open={saleModalOpen}
+        title="Verkaufsvorgang"
+        description="Käufer, Preis und Zahlungsart — Basis für Kaufvertrag und QR-Rechnung."
+        onClose={() => setSaleModalOpen(false)}
+      >
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            setPageError(null);
+            saveSaleMutation.mutate();
+          }}
+          className="space-y-4"
+        >
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Käufer (Kontakt)">
+              <Select value={saleForm.buyerId} onChange={(e) => setSaleForm({ ...saleForm, buyerId: e.target.value })}>
+                <option value="">– Kein Kontakt zugeordnet –</option>
+                {(contacts ?? []).map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.displayName}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+            <Field label="Status">
+              <Select value={saleForm.status} onChange={(e) => setSaleForm({ ...saleForm, status: e.target.value as SaleStatus })}>
+                {SALE_STATUSES.map((s) => (
+                  <option key={s} value={s}>
+                    {SALE_STATUS_LABELS[s]}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+          </div>
+          <div className="grid grid-cols-3 gap-3">
+            <Field label="Verkaufspreis (CHF, inkl. MWST)">
+              <Input type="number" min={0} step={100} value={saleForm.salePrice} onChange={(e) => setSaleForm({ ...saleForm, salePrice: e.target.value })} />
+            </Field>
+            <Field label="Zahlungsart">
+              <Select value={saleForm.paymentMethod} onChange={(e) => setSaleForm({ ...saleForm, paymentMethod: e.target.value as SalePaymentMethod })}>
+                {(Object.keys(SALE_PAYMENT_LABELS) as SalePaymentMethod[]).map((m) => (
+                  <option key={m} value={m}>
+                    {SALE_PAYMENT_LABELS[m]}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+            <Field label="Verkauft am">
+              <Input type="date" value={saleForm.soldAt} onChange={(e) => setSaleForm({ ...saleForm, soldAt: e.target.value })} />
+            </Field>
+          </div>
+          {saleForm.paymentMethod === "LEASING" || saleForm.paymentMethod === "FINANZIERUNG" ? (
+            <div className="grid grid-cols-2 gap-3 rounded-xl bg-slate-50 p-3">
+              <Field label="Leasing-/Finanzierungspartner">
+                <Input value={saleForm.leasingPartner} onChange={(e) => setSaleForm({ ...saleForm, leasingPartner: e.target.value })} placeholder="z. B. Bank oder Leasinggesellschaft" />
+              </Field>
+              <div className="grid grid-cols-3 gap-2">
+                <Field label="Monatsrate">
+                  <Input type="number" min={0} value={saleForm.leasingMonthlyRate} onChange={(e) => setSaleForm({ ...saleForm, leasingMonthlyRate: e.target.value })} />
+                </Field>
+                <Field label="Dauer (Monate)">
+                  <Input type="number" min={1} value={saleForm.leasingTermMonths} onChange={(e) => setSaleForm({ ...saleForm, leasingTermMonths: e.target.value })} />
+                </Field>
+                <Field label="Anzahlung">
+                  <Input type="number" min={0} value={saleForm.leasingDownPayment} onChange={(e) => setSaleForm({ ...saleForm, leasingDownPayment: e.target.value })} />
+                </Field>
+              </div>
+            </div>
+          ) : null}
+          <div className="grid grid-cols-3 gap-3 rounded-xl bg-slate-50 p-3">
+            <Field label="Eintausch-Abzug (CHF)">
+              <Input type="number" min={0} value={saleForm.tradeInCredit} onChange={(e) => setSaleForm({ ...saleForm, tradeInCredit: e.target.value })} placeholder="optional" />
+            </Field>
+            <div className="col-span-2">
+              <Field label="Eintausch-Fahrzeug" hint="Erscheint als Abzugsposten auf der Rechnung">
+                <Input value={saleForm.tradeInDescription} onChange={(e) => setSaleForm({ ...saleForm, tradeInDescription: e.target.value })} placeholder="z. B. VW Passat, SH-99999" />
+              </Field>
+            </div>
+          </div>
+          <Field label="Notizen">
+            <textarea
+              rows={2}
+              value={saleForm.notes}
+              onChange={(e) => setSaleForm({ ...saleForm, notes: e.target.value })}
+              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-slate-500 focus:outline-none focus:ring-2 focus:ring-slate-900/10"
+            />
+          </Field>
+          <div className="flex justify-end gap-2 pt-2">
+            <Button type="button" variant="secondary" onClick={() => setSaleModalOpen(false)}>
+              Abbrechen
+            </Button>
+            <Button type="submit" disabled={saveSaleMutation.isPending}>
+              {saveSaleMutation.isPending ? "Speichern …" : "Speichern"}
+            </Button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* Zahlung erfassen */}
+      <Modal
+        open={paymentModalOpen}
+        title="Zahlung erfassen"
+        description="Eingänge des Käufers — Rechnungen werden automatisch als bezahlt markiert."
+        onClose={() => setPaymentModalOpen(false)}
+      >
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            setPageError(null);
+            paymentMutation.mutate();
+          }}
+          className="space-y-4"
+        >
+          <div className="grid grid-cols-3 gap-3">
+            <Field label="Betrag (CHF)">
+              <Input type="number" min={0.01} step={0.01} value={paymentForm.amount} onChange={(e) => setPaymentForm({ ...paymentForm, amount: e.target.value })} required />
+            </Field>
+            <Field label="Methode">
+              <Select value={paymentForm.method} onChange={(e) => setPaymentForm({ ...paymentForm, method: e.target.value })}>
+                <option value="UEBERWEISUNG">Überweisung</option>
+                <option value="BAR">Bar</option>
+                <option value="LEASING">Leasing-Auszahlung</option>
+                <option value="SONSTIGES">Sonstiges</option>
+              </Select>
+            </Field>
+            <Field label="Datum">
+              <Input type="date" value={paymentForm.paidAt} onChange={(e) => setPaymentForm({ ...paymentForm, paidAt: e.target.value })} />
+            </Field>
+          </div>
+          {paymentForm.method === "BAR" && Number(paymentForm.amount) >= 100000 ? (
+            <div className="rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm">
+              <p className="flex items-center gap-1.5 font-semibold text-amber-800">
+                <ShieldAlert size={14} /> Barzahlung ab CHF 100'000 — Identitätsprüfung nötig (GwG Art. 20)
+              </p>
+              <div className="mt-2 grid grid-cols-2 gap-3">
+                <Field label="Identität festgestellt am">
+                  <Input type="date" value={paymentForm.gwgIdentifiedAt} onChange={(e) => setPaymentForm({ ...paymentForm, gwgIdentifiedAt: e.target.value })} />
+                </Field>
+                <Field label="Ausweisdokument">
+                  <Input value={paymentForm.gwgIdDocument} onChange={(e) => setPaymentForm({ ...paymentForm, gwgIdDocument: e.target.value })} placeholder="z. B. Pass X1234567" />
+                </Field>
+              </div>
+            </div>
+          ) : null}
+          <Field label="Notizen">
+            <Input value={paymentForm.notes} onChange={(e) => setPaymentForm({ ...paymentForm, notes: e.target.value })} placeholder="optional" />
+          </Field>
+          <div className="flex justify-end gap-2 pt-2">
+            <Button type="button" variant="secondary" onClick={() => setPaymentModalOpen(false)}>
+              Abbrechen
+            </Button>
+            <Button type="submit" disabled={paymentMutation.isPending}>
+              {paymentMutation.isPending ? "Speichern …" : "Speichern"}
+            </Button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* PDF per E-Mail versenden */}
+      <Modal
+        open={emailModalOpen}
+        title="PDF per E-Mail"
+        description="Angebot, Verträge, Rechnungen und Mahnungen als Anhang versenden (lokal via Mailhog getestet)."
+        onClose={() => setEmailModalOpen(false)}
+      >
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            setPageError(null);
+            if (emailDocId) emailDocMutation.mutate();
+          }}
+          className="space-y-4"
+        >
+          <Field label="Dokument">
+            <Select value={emailDocId ?? ""} onChange={(e) => setEmailDocId(e.target.value)}>
+              <option value="">– Dokument wählen –</option>
+              {vehicle.generatedDocuments.map((d) => (
+                <option key={d.id} value={d.id}>
+                  {d.title}
+                </option>
+              ))}
+            </Select>
+          </Field>
+          <Field label="An (E-Mail)">
+            <Input type="email" value={emailForm.to} onChange={(e) => setEmailForm({ ...emailForm, to: e.target.value })} required />
+          </Field>
+          <Field label="Betreff">
+            <Input value={emailForm.subject} onChange={(e) => setEmailForm({ ...emailForm, subject: e.target.value })} />
+          </Field>
+          <Field label="Nachricht">
+            <textarea
+              rows={3}
+              value={emailForm.message}
+              onChange={(e) => setEmailForm({ ...emailForm, message: e.target.value })}
+              placeholder="Anbei das Dokument …"
+              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-slate-500 focus:outline-none focus:ring-2 focus:ring-slate-900/10"
+            />
+          </Field>
+          <div className="flex justify-end gap-2 pt-2">
+            <Button type="button" variant="secondary" onClick={() => setEmailModalOpen(false)}>
+              Abbrechen
+            </Button>
+            <Button type="submit" disabled={emailDocMutation.isPending || !emailDocId}>
+              <Send size={14} /> {emailDocMutation.isPending ? "Senden …" : "Senden"}
             </Button>
           </div>
         </form>

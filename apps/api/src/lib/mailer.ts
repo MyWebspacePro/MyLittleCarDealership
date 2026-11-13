@@ -16,6 +16,17 @@ function getTransporter(): nodemailer.Transporter {
   return transporter;
 }
 
-export async function sendMail(to: string, subject: string, text: string): Promise<void> {
-  await getTransporter().sendMail({ from: env.SMTP_FROM, to, subject, text });
+export interface MailAttachment {
+  filename: string;
+  path: string;
+}
+
+/** E-Mail senden; PDFs/Belege optional als Anhang (Rechnung, Mahnung …). */
+export async function sendMail(
+  to: string,
+  subject: string,
+  text: string,
+  attachments?: MailAttachment[],
+): Promise<void> {
+  await getTransporter().sendMail({ from: env.SMTP_FROM, to, subject, text, attachments });
 }

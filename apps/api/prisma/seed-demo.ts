@@ -110,6 +110,18 @@ async function ensureInquiry(vehicleId: string, key: { subject: string }, data: 
   return prisma.inquiry.create({ data: { vehicleId, ...data } });
 }
 
+async function ensureSale(vehicleId: string, data: Record<string, unknown>) {
+  const existing = await prisma.saleDeal.findUnique({ where: { vehicleId } });
+  if (existing) return existing;
+  return prisma.saleDeal.create({ data: { vehicleId, ...data } });
+}
+
+async function ensureAddon(saleDealId: string, name: string, data: Record<string, unknown>) {
+  const existing = await prisma.saleAddon.findFirst({ where: { saleDealId, name } });
+  if (existing) return existing;
+  return prisma.saleAddon.create({ data: { saleDealId, name, ...data } });
+}
+
 async function ensureAppointment(vehicleId: string, key: { title: string }, data: Record<string, unknown>) {
   const existing = await prisma.appointment.findFirst({ where: { vehicleId, title: key.title } });
   if (existing) return prisma.appointment.update({ where: { id: existing.id }, data });
@@ -117,6 +129,20 @@ async function ensureAppointment(vehicleId: string, key: { title: string }, data
 }
 
 async function main() {
+  // Demo-QR-IBAN (SIX-Testbereich, QR-IDD 30031) für die QR-Rechnung —
+  // der Händler ersetzt ihn später durch den eigenen QR-IBAN der Bank.
+  const setting = await prisma.setting.findUnique({ where: { id: 1 } });
+  if (setting && (!setting.qrIban || setting.qrIban === "CH853003100000000001")) {
+    await prisma.setting.update({
+      where: { id: 1 },
+      data: {
+        qrIban: "CH8530031000000000001",
+        iban: setting.iban || "CH93 0076 2011 6238 5295 7",
+        bankName: setting.bankName || "Demo-Bank Schaffhausen",
+      },
+    });
+  }
+
   const max = await ensureContact({
     email: "max.muster@example.ch",
     type: "PRIVAT",
@@ -214,6 +240,17 @@ async function main() {
     summary: "Möchte am Samstag eine Probefahrt machen. Versprochene Fotos des Innenraums geschickt.",
     nextFollowUpAt: new Date(Date.now() + 86_400_000),
   });
+  // Verkaufsvorgang (Reserviert) mit Zusatzleistung — Phase-E-Demo.
+  const golfSale = await ensureSale(golf.id, {
+    buyerId: petra.id,
+    status: "RESERVIERT",
+    salePrice: 22400,
+    paymentMethod: "UEBERWEISUNG",
+    notes: "Herr Hofer aus Schaffhausen, Reservierung bis Ende der Woche.",
+  });
+  if (golfSale) {
+    await ensureAddon(golfSale.id, "Occasionsgarantie 12 Monate", { provider: "Autogarantie Partner", price: 690 });
+  }
   // Demo-Termine: morgen 14:00 bzw. übermorgen 10:00 (stabil für Kalender-Demo).
   const probeStart = new Date();
   probeStart.setDate(probeStart.getDate() + 1);

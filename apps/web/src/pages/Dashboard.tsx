@@ -4,7 +4,16 @@ import { ArrowUpRight, Building2, CarFront, Inbox, Settings, ShieldCheck, UserRo
 import { useAuth } from "../lib/auth";
 import { api } from "../lib/api";
 import { Card, CardHeader, RoleBadge, Spinner } from "../components/ui";
-import { ROLES, type LeadListItem, type Setting, type User, type VehicleListItem } from "../lib/types";
+import {
+  ROLES,
+  REMINDER_LEVEL_LABELS,
+  chf,
+  type InvoiceInfo,
+  type LeadListItem,
+  type Setting,
+  type User,
+  type VehicleListItem,
+} from "../lib/types";
 
 const quickLinks = [
   { to: "/users", label: "Team verwalten", description: "Benutzer, Rollen und Zugänge", icon: Users },
@@ -30,6 +39,14 @@ export default function Dashboard() {
     queryKey: ["vehicles"],
     queryFn: () => api<VehicleListItem[]>("/vehicles"),
   });
+  // Erinnerungen: offene/überfällige Rechnungen und fällige Mahnfristen.
+  const { data: invoices } = useQuery({
+    queryKey: ["invoices"],
+    queryFn: () => api<InvoiceInfo[]>("/invoices"),
+  });
+  const openInvoices = (invoices ?? []).filter((i) => !i.isCredit && (i.status === "VERSANDT" || i.status === "TEILZAHLUNG"));
+  const overdueInvoices = openInvoices.filter((i) => i.dueAt && new Date(i.dueAt) < new Date());
+  const dueReminders = openInvoices.filter((i) => i.reminderDueAt && new Date(i.reminderDueAt) < new Date());
 
   const loading = usersLoading || settingsLoading;
   const newLeads = (leads ?? []).filter((l) => l.status === "NEU").length;
@@ -139,6 +156,38 @@ export default function Dashboard() {
           </Card>
         </Link>
       </div>
+
+      {overdueInvoices.length || dueReminders.length ? (
+        <Card>
+          <CardHeader
+            title="Erinnerungen"
+            description="Überfällige Rechnungen und fällige Mahnfristen — besser heute als morgen."
+          />
+          <div className="divide-y divide-slate-100">
+            {overdueInvoices.map((inv) => (
+              <div key={inv.id} className="flex flex-wrap items-center gap-2 px-5 py-2.5 text-sm">
+                <span className="rounded-md bg-rose-50 px-2 py-0.5 text-xs font-semibold text-rose-700">Überfällig</span>
+                <span className="font-medium text-slate-800">
+                  {inv.isCredit ? "Gutschrift" : "Rechnung"} {inv.number}
+                </span>
+                <span className="text-slate-600">{inv.vehicleTitle}</span>
+                <span className="text-slate-500">Fällig am {new Intl.DateTimeFormat("de-CH", { dateStyle: "medium" }).format(new Date(inv.dueAt!))}</span>
+                <span className="ml-auto font-semibold text-slate-800">{chf(inv.totalAmount)}</span>
+              </div>
+            ))}
+            {dueReminders.map((inv) => (
+              <div key={`r-${inv.id}`} className="flex flex-wrap items-center gap-2 px-5 py-2.5 text-sm">
+                <span className="rounded-md bg-amber-50 px-2 py-0.5 text-xs font-semibold text-amber-700">Mahnfrist abgelaufen</span>
+                <span className="font-medium text-slate-800">
+                  Rechnung {inv.number} ({REMINDER_LEVEL_LABELS[inv.reminderLevel]})
+                </span>
+                <span className="text-slate-600">{inv.vehicleTitle}</span>
+                <span className="ml-auto font-semibold text-slate-800">{chf(inv.totalAmount)}</span>
+              </div>
+            ))}
+          </div>
+        </Card>
+      ) : null}
 
       <Card>
         <CardHeader title="Schnellzugriff" description="Die wichtigsten Bereiche auf einen Blick." />

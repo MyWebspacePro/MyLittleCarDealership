@@ -9,6 +9,7 @@ import { audit } from "../lib/audit.js";
 import { authGuard } from "../plugins/auth.js";
 import { PdfBuilder, formatDateDe, formatChf, renderPdf, type PdfCompany } from "../lib/pdf.js";
 import { DOCUMENTS_DIR, isSafeFilename, mimeForFilename, saveGeneratedFile } from "../lib/uploads.js";
+import { sendMail } from "../lib/mailer.js";
 import { contactDisplayName } from "./contacts.routes.js";
 
 // Server-generierte Dokumente: Ankaufsangebot und Ankaufsvertrag (Phase B),
@@ -342,5 +343,39 @@ export async function documentRoutes(app: FastifyInstance): Promise<void> {
     const safeTitle = document.title.replace(/[^\w. -]/g, "").trim() || "dokument";
     reply.header("Content-Disposition", `attachment; filename*=UTF-8''${encodeURIComponent(`${safeTitle}.pdf`)}`);
     return reply.send(createReadStream(full));
+  });
+
+  // ── PDF per E-Mail versenden (SMTP; lokal via Mailhog) ──────────────────
+
+  app.post("/documents/:id/email", { preHandler: authGuard }, async (req, reply) => {
+    const { id } = z.object({ id: z.string().min(1) }).parse(req.params);
+    const { to, subject, message } = z
+      .object({
+        to: z.string().email(),
+        subject: z.string().trim().max(200).nullish(),
+        message: z.string().trim().max(2000).nullish(),
+      })
+      .parse(req.body ?? {});
+    const document = await prisma.generatedDocument.findUnique({ where: { id } });
+    if (!document) return reply.code(404).send({ error: "Dokument nicht gefunden" });
+    const full = path.join(DOCUMENTS_DIR, document.filePath);
+    if (!isSafeFilename(document.filePath) || !(await stat(full).then((s) => s.isFile()).catch(() => false))) {
+      return reply.code(404).send({ error: "Datei nicht gefunden" });
+    }
+    const settings = await prisma.setting.findUnique({ where: { id: 1 } });
+    const safeTitle = document.title.replace(/[^\w. -]/g, "").trim() || "dokument";
+    await sendMail(
+      to,
+      subject?.trim() || document.title,
+      [
+        message?.trim() || `Anbei das Dokument «${document.title}».`,
+        "",
+        "Freundliche Grüsse",
+        settings?.companyName ?? "",
+      ].join("\n"),
+      [{ filename: `${safeTitle}.pdf`, path: full }],
+    );
+    await audit(req.user!.id, "DOCUMENT_EMAILED", "GeneratedDocument", id, { to });
+    return { ok: true };
   });
 }

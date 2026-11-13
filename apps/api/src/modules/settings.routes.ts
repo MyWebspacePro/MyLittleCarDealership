@@ -19,6 +19,12 @@ const settingSchema = z.object({
   iban: z.string().max(50).default(""),
   bankName: z.string().max(100).default(""),
   paymentDays: z.coerce.number().int().min(0).max(365).default(30),
+  // QR-Rechnung (SIX), AS24-Händlerportal, Gewährleistungs-Text und
+  // Standard-Zielgewinn (Ankaufsempfehlung).
+  qrIban: z.string().max(34).default(""),
+  as24PortalUrl: z.string().max(300).default(""),
+  warrantyText: z.string().max(4000).default(""),
+  targetProfitDefault: z.coerce.number().min(0).default(0),
 });
 
 // Decimal aus Prisma als Zahl ausliefern (JSON wuerde sonst Strings erzeugen).
@@ -27,6 +33,7 @@ function serialize(s: Setting) {
     ...s,
     vatRateStandard: Number(s.vatRateStandard),
     vatRateReduced: Number(s.vatRateReduced),
+    targetProfitDefault: Number(s.targetProfitDefault),
   };
 }
 

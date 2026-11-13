@@ -22,6 +22,10 @@ const schema = z.object({
   vatRateReduced: z.number({ invalid_type_error: "Zahl eingeben" }).min(0).max(100),
   iban: z.string().max(50),
   bankName: z.string().max(100),
+  qrIban: z.string().max(34),
+  as24PortalUrl: z.string().max(300),
+  warrantyText: z.string().max(4000),
+  targetProfitDefault: z.number({ invalid_type_error: "Zahl eingeben" }).min(0),
   paymentDays: z.number({ invalid_type_error: "Zahl eingeben" }).int().min(0).max(365),
 });
 type Values = z.infer<typeof schema>;
@@ -39,6 +43,10 @@ const FALLBACK: Values = {
   vatRateReduced: 2.6,
   iban: "",
   bankName: "",
+  qrIban: "",
+  as24PortalUrl: "",
+  warrantyText: "",
+  targetProfitDefault: 0,
   paymentDays: 30,
 };
 
@@ -157,13 +165,39 @@ export default function Settings() {
             </Card>
 
             <Card>
-              <CardHeader title="Bank" description="Für die QR-Rechnung und Auszahlungen." />
+              <CardHeader title="Bank & QR-Rechnung" description="Auszahlungen und der Schweizer QR-Rechnungszahlteil." />
               <div className="grid gap-4 px-5 py-5 sm:grid-cols-2">
                 <Field label="IBAN" error={errors.iban?.message}>
                   <Input {...register("iban")} placeholder="CH00 0000 0000 0000 0000 0" />
                 </Field>
                 <Field label="Bank" error={errors.bankName?.message}>
                   <Input {...register("bankName")} />
+                </Field>
+                <Field
+                  label="QR-IBAN"
+                  hint="Bei der Bank beantragen (beginnt mit CH…3…) — erst damit erscheint der QR-Zahlteil auf Rechnungen und Mahnungen."
+                  error={errors.qrIban?.message}
+                >
+                  <Input {...register("qrIban")} placeholder="CHxx 3xxxx xxxx xxxx xxxx x" />
+                </Field>
+                <Field label="AutoScout24-Händlerportal" hint="URL zum Manager — als Klick-Link im Verkauf-Tab">
+                  <Input {...register("as24PortalUrl")} placeholder="https://www.autoscout24.ch/manager" />
+                </Field>
+              </div>
+            </Card>
+
+            <Card>
+              <CardHeader title="Kalkulation & Verträge" description="Standardwerte für Ankaufsempfehlung und Vertrags-PDFs." />
+              <div className="grid gap-4 px-5 py-5 sm:grid-cols-2">
+                <Field label="Standard-Zielgewinn (CHF)" hint="Flosse in der Ankaufs-Empfehlung, wenn kein Zielgewinn erfasst ist">
+                  <Input type="number" min={0} step={100} {...register("targetProfitDefault", { valueAsNumber: true })} />
+                </Field>
+                <Field label="Gewährleistungs-Text" hint="§ 4 im Kaufvertrag — leer = Standardtext «wie besichtigt»">
+                  <textarea
+                    rows={4}
+                    {...register("warrantyText")}
+                    className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-slate-500 focus:outline-none focus:ring-2 focus:ring-slate-900/10"
+                  />
                 </Field>
               </div>
             </Card>

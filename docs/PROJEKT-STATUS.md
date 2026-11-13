@@ -1,6 +1,6 @@
 # Projekt-Status
 
-Stand: 13.11.2026 (Phase D der Schaltzentrale)
+Stand: 13.11.2026 (Phase E der Schaltzentrale)
 
 ## Live
 
@@ -97,13 +97,12 @@ Stand: 13.11.2026 (Phase D der Schaltzentrale)
 - Demo-Seed erweitert: Golf mit 8 Ausstattungsmerkmalen + AS24-Link, 2 Anfragen,
   Probefahrt/Besichtigung mit kalenderstabilen Terminen (morgen 14:00 / übermorgen 10:00)
 
-## Offen / als Nächstes (Phasen E–G)
-- **E Abschluss**: Kaufvertrag-PDF (OR-Klauseln), Schweizer QR-Rechnung (`swissqrbill`,
-  QR-IBAN + 27-stellige QRR), Leasing-Variante, Zusatzleistungen, Zahlungen, GwG-Check
-  bei Bar ≥ 100'000, Gutschrift, Mahnwesen mit Mahn-PDFs, E-Mail-Versand,
-  Zusammenfassungs-PDF (Archiv 10 J.), Auswertungen, Buchhaltungsexport CSV
+## Offen / als Nächstes (Phasen F–G)
+- **A Fundament** ✓ · **B Ankauf** ✓ · **C Aufbereitung** ✓ · **D Verkauf-Frontend** ✓ ·
+  **E Abschluss** ✓ (je 13.11.2026, Details oben)
 - **F Öffentliche Seite**: Landing + Ankaufsformular (Uploads, nDSG-Einwilligung,
-  Rate-Limit/Honeypot) + Fahrzeugbörse + Impressum/Datenschutz
+  Rate-Limit/Honeypot) + Fahrzeugbörse (Verkaufsfahrzeuge öffentlich, Anfrage-Button
+  schreibt Anfrage ins System) + Impressum/Datenschutz
 - **G**: Demo-Seed 1:1 VPS, Doku-Finalisierung
 
 ## Verifiziert
@@ -123,6 +122,21 @@ Stand: 13.11.2026 (Phase D der Schaltzentrale)
 - UI (Playwright, 12/12): AS24-Vorbereitung, Ausstattungs-Maske + Speichern,
   Tafel-Karte, Anfragen mit WhatsApp-Klick-Link, Termine, Kalender-Gruppierung,
   Standtage im Dashboard
+
+**Phase E**
+- API-Durchlauf (dev + Docker-Vollstack): Kaufvertrag-PDF, Rechnung 2026-001 mit
+  korrekten Beträgen (Netto 21'359.85, MWST 1'730.15, Abgaben 50, Total 23'140),
+  gültiger QRR (30031…018), Rechnungs-PDF-Download, Mahnstufe 1, Zahlung mit
+  Auto-Status, GwG-Block bei Bar 120'000 ohne Identitätsfelder (400), Gutschrift
+  mit negativem Total und Verknüpfung, Zusammenfassungs-PDF, Reports (Bestandswert
+  40'145), CSV-Export, PDF-E-Mail (Mailhog) — 401 ohne Token
+- QR-Rechnung visuell geprüft: Zahlteil (Empfangsschein + QR-Code + Zahlbar durch)
+  korrekt auf der A4-Seite, Mahnungs-PDF mit reduziertem Betrag (18'140.00) und
+  QR-Teil auf eigener Seite; Kaufvertrag 2 Seiten mit § 1–5 und Checkliste
+- UI (Playwright, 16/16): Abschluss-Karte, Zusatzleistung, Kaufvertrag-PDF,
+  QR-Rechnung erstellen, Mahn-Stufe 1, GwG-Box im Zahlungs-Modal + Speichern mit
+  Badge, Rechnung automatisch «Bezahlt», Auswertungs-KPIs, CSV-Button,
+  Settings mit QR-IBAN-Feld, Navigation Auswertungen
 
 Jede Phase: `npm run build` (tsc beider Apps + Vite) fehlerfrei; UI-Tests mobil und
 Desktop; Docker-Vollstack danach `down -v`.
