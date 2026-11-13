@@ -52,6 +52,7 @@ fi
 if [ -n "$DOMAIN" ]; then
   set_env APP_DOMAIN "$DOMAIN"
   set_env CORS_ORIGINS "https://${DOMAIN}"
+  set_env SMTP_FROM "MyLittleCarDealership <noreply@${DOMAIN}>"
   echo "→ Domain gesetzt: $DOMAIN"
 fi
 
