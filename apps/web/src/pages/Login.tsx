@@ -1,11 +1,11 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Navigate, useNavigate } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { ArrowRight, Car, ShieldCheck, Users, Wallet } from "lucide-react";
 import { useAuth } from "../lib/auth";
-import { Alert, Button, Field, Input } from "../components/ui";
+import { Alert, Button, Field, Input, Spinner } from "../components/ui";
 
 const schema = z.object({
   email: z.string().min(1, "E-Mail eingeben").email("Gültige E-Mail eingeben"),
@@ -20,7 +20,7 @@ const features = [
 ];
 
 export default function Login() {
-  const { login } = useAuth();
+  const { login, user, loading } = useAuth();
   const navigate = useNavigate();
   const [error, setError] = useState("");
   const {
@@ -28,6 +28,17 @@ export default function Login() {
     handleSubmit,
     formState: { errors, isSubmitting },
   } = useForm<Values>({ resolver: zodResolver(schema) });
+
+  // Bereits angemeldet (gültige Session im Cookie)? Dann nicht das Formular
+  // zeigen, sondern direkt in die App — auch wenn man /login eintippt.
+  if (loading) {
+    return (
+      <div className="grid min-h-screen place-items-center">
+        <Spinner label="Sitzung wird geprüft …" />
+      </div>
+    );
+  }
+  if (user) return <Navigate to="/" replace />;
 
   const onSubmit = async (values: Values) => {
     setError("");

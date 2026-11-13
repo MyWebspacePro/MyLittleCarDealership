@@ -28,14 +28,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Auf /login gibt es per Definition keine Session. Wuerde man trotzdem
-    // /auth/me aufrufen, scheitert es -> api() leitet auf /login um ->
-    // Neuladen -> dieser Effekt erneut -> Endlosschleife (Flackern).
-    if (window.location.pathname === "/login") {
-      setLoading(false);
-      return;
-    }
-    // Session aus dem httpOnly-Cookie wiederherstellen: /auth/me liefert ohne
+    // Session aus dem httpOnly-Cookie wiederherstellen — auch auf /login: Wer
+    // dort mit gültiger Session landet, wird von der Login-Seite direkt in
+    // die App geschickt. Ein Redirect-Loop ist ausgeschlossen, weil api()
+    // bei 401 nicht weiterleitet, solange man schon auf /login ist.
     // Access-Token 401, api() holt sich per /auth/refresh ein neues und
     // wiederholt den Aufruf. Kein Token im localStorage, nichts zu stehlen.
     api<CurrentUser>("/auth/me")
