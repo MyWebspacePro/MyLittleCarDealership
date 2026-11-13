@@ -38,4 +38,14 @@ Stand: 13.11.2026
 - UI: Login, Dashboard, Team, Einstellungen, Profil (Desktop + mobil, kein Overflow)
 - `npm run build` fehlerfrei
 - Docker-Vollständiger Test: nginx → API → PostgreSQL auf Port 8080, Login über nginx 200
-- VPS-Deploy: Health/Login/SPA über HTTPS 200
+- VPS-Deploy: Health/Login/SPA über HTTPS 200, Let's-Encrypt-Zertifikat gültig, Backup angelegt
+
+## Bekannte Hinweise
+
+- `npm audit` meldet Advisories für `zod` (<4.6.6), `react-router` (6.x), `nodemailer`
+  (6.x) und die transitive `deepmerge-ts` (über Prisma). Die Korrekturen sind Breaking
+  Changes (zod 4, react-router 7, nodemailer 10) und werden mit den Fach-Specs
+  eingehend geprüft. Die betroffenen Patterns (z. B. Collection-Validierung in zod,
+  SSR in react-router, Mailversand) werden im aktuellen Grundgerüst nicht verwendet.
+- `nodemailer` ist derzeit nur als Stub (`lib/mailer.ts`) vorhanden und wird erst mit
+  den Mail-Funktionen (Passwort-Reset, Rechnungsversand) aktiv genutzt.
