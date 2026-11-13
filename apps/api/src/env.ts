@@ -20,6 +20,18 @@ const schema = z.object({
   SMTP_USER: z.string().default(""),
   SMTP_PASSWORD: z.string().default(""),
   SMTP_FROM: z.string().default("MyLittleCarDealership <noreply@example.ch>"),
+  // IMAP-Eingang (Posteingang-Automatik): ohne IMAP_HOST bleibt der Poller
+  // deaktiviert — alle anderen Funktionen laufen weiter.
+  IMAP_HOST: z.string().default(""),
+  IMAP_PORT: z.coerce.number().default(993),
+  IMAP_USER: z.string().default(""),
+  IMAP_PASSWORD: z.string().default(""),
+  IMAP_MAILBOX: z.string().default("INBOX"),
+  IMAP_TLS: z
+    .string()
+    .default("true")
+    .transform((v) => v !== "false"),
+  IMAP_POLL_SECONDS: z.coerce.number().default(120),
 });
 
 export const env = schema.parse(process.env);

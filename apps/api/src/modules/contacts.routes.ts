@@ -99,16 +99,41 @@ export async function contactRoutes(app: FastifyInstance): Promise<void> {
           select: {
             id: true, status: true, salePrice: true, createdAt: true,
             vehicle: { select: { id: true, make: true, model: true, status: true } },
+            invoices: { orderBy: { createdAt: "desc" }, select: { id: true, number: true, status: true, isCredit: true, subject: true, totalAmount: true, vatAmount: true, issuedAt: true, dueAt: true, reminderLevel: true } },
+            payments: { orderBy: { paidAt: "desc" }, select: { id: true, direction: true, amount: true, method: true, paidAt: true } },
           },
         },
         _count: { select: { inquiries: true, appointments: true } },
       },
     });
     if (!contact) return reply.code(404).send({ error: "Kontakt nicht gefunden" });
+    // Rechnungshistorie des Kunden: alle Rechnungen/Gutschriften über seine
+    // Verkaufsvorgänge plus die zugehörigen Zahlungen (offener Betrag je
+    // Vorgang berechnet sich im Frontend aus totalAmount − EINGANG-Zahlungen).
+    const invoices = contact.salesAsBuyer.flatMap((sale) =>
+      sale.invoices.map((invoice) => ({
+        ...invoice,
+        totalAmount: invoice.totalAmount != null ? Number(invoice.totalAmount) : null,
+        vatAmount: invoice.vatAmount != null ? Number(invoice.vatAmount) : null,
+        vehicle: sale.vehicle,
+        saleId: sale.id,
+      })),
+    );
+    const payments = contact.salesAsBuyer.flatMap((sale) =>
+      sale.payments.map((payment) => ({
+        ...payment,
+        amount: Number(payment.amount),
+        vehicle: sale.vehicle,
+        saleId: sale.id,
+      })),
+    );
     return {
       ...serialize(contact),
       inquiryCount: contact._count.inquiries,
       appointmentCount: contact._count.appointments,
+      salesAsBuyer: contact.salesAsBuyer.map(({ invoices: _i, payments: _p, ...sale }) => sale),
+      invoices,
+      payments,
     };
   });
 

@@ -8,6 +8,7 @@ import FahrzeugDetail from "./pages/FahrzeugDetail";
 import Fahrzeuge from "./pages/Fahrzeuge";
 import Kalender from "./pages/Kalender";
 import Kunden from "./pages/Kunden";
+import Kundendetail from "./pages/Kundendetail";
 import Login from "./pages/Login";
 import Posteingang from "./pages/Posteingang";
 import Profile from "./pages/Profile";
@@ -70,6 +71,7 @@ export default function App() {
         <Route path="fahrzeuge" element={<Fahrzeuge />} />
         <Route path="fahrzeuge/:id" element={<FahrzeugDetail />} />
         <Route path="kunden" element={<Kunden />} />
+        <Route path="kunden/:id" element={<Kundendetail />} />
         <Route path="kalender" element={<Kalender />} />
         <Route path="auswertungen" element={<Auswertungen />} />
         <Route path="users" element={<Users />} />

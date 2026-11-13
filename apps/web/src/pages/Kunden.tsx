@@ -1,9 +1,10 @@
 import { useMemo, useState } from "react";
 import type { FormEvent } from "react";
+import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Pencil, Plus, Search, Trash2 } from "lucide-react";
+import { MessageCircle, Pencil, Plus, Search, Trash2 } from "lucide-react";
 import { api } from "../lib/api";
-import { CONTACT_TYPE_LABELS, type Contact, type ContactListItem, type ContactType } from "../lib/types";
+import { CONTACT_TYPE_LABELS, whatsappLink, type Contact, type ContactListItem, type ContactType } from "../lib/types";
 import { Alert, Badge, Button, Card, CardHeader, EmptyState, Field, Input, Modal, Spinner } from "../components/ui";
 
 type FormState = {
@@ -199,7 +200,9 @@ export default function Kunden() {
                 {filtered.map((c) => (
                   <tr key={c.id} className="hover:bg-slate-50/70">
                     <td className="px-5 py-3">
-                      <p className="font-semibold text-slate-900">{c.displayName}</p>
+                      <p className="font-semibold text-slate-900">
+                        <Link to={`/kunden/${c.id}`} className="hover:text-amber-700 hover:underline">{c.displayName}</Link>
+                      </p>
                       {c.type === "PRIVAT" && c.companyName ? <p className="text-xs text-slate-500">{c.companyName}</p> : null}
                     </td>
                     <td className="px-3 py-3">
@@ -209,8 +212,15 @@ export default function Kunden() {
                     </td>
                     <td className="px-3 py-3">
                       <div className="flex flex-col text-slate-600">
-                        {c.mobile ? <span>{c.mobile}</span> : null}
-                        {c.phone ? <span>{c.phone}</span> : null}
+                        {c.mobile ? (
+                          <span className="inline-flex items-center gap-1.5">
+                            <a href={`tel:${c.mobile.replace(/\s/g, "")}`} className="hover:underline" title="Anrufen (am Handy direkt, am Mac via Apple Continuity)">{c.mobile}</a>
+                            <a href={whatsappLink(c.mobile)} target="_blank" rel="noreferrer" title="WhatsApp öffnen" className="text-emerald-600 hover:text-emerald-700">
+                              <MessageCircle size={13} />
+                            </a>
+                          </span>
+                        ) : null}
+                        {c.phone ? <a href={`tel:${c.phone.replace(/\s/g, "")}`} className="hover:underline">{c.phone}</a> : null}
                         {c.email ? <a href={`mailto:${c.email}`} className="text-xs text-slate-500 hover:underline">{c.email}</a> : null}
                         {!c.mobile && !c.phone && !c.email ? <span className="text-slate-400">–</span> : null}
                       </div>

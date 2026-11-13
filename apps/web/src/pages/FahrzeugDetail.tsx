@@ -1941,6 +1941,21 @@ export default function FahrzeugDetail() {
                       <CreditCard size={14} /> Zahlung erfassen
                     </Button>
                   </div>
+                  {vehicle.sale.salePrice != null ? (
+                    vehicle.sale.payments
+                      .filter((p) => p.direction === "EINGANG")
+                      .reduce((sum, p) => sum + p.amount, 0) > 0 || vehicle.sale.tradeInCredit ? (
+                      <div
+                        className={`mb-3 rounded-xl px-4 py-2.5 text-sm font-semibold ${
+                          (vehicle.sale.openAmount ?? 0) > 0 ? "bg-amber-50 text-amber-800" : "bg-emerald-50 text-emerald-700"
+                        }`}
+                      >
+                        {(vehicle.sale.openAmount ?? 0) > 0
+                          ? `Offen: ${chf(vehicle.sale.openAmount)} von ${chf(vehicle.sale.salePrice)}${vehicle.sale.tradeInCredit ? " (zzgl. Eintausch-Abzug)" : ""}`
+                          : "Voll bezahlt — kein offener Betrag."}
+                      </div>
+                    ) : null
+                  ) : null}
                   {vehicle.sale.payments.length === 0 ? (
                     <p className="text-sm text-slate-500">Noch keine Zahlungen erfasst.</p>
                   ) : (

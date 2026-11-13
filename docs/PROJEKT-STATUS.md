@@ -1,6 +1,6 @@
 # Projekt-Status
 
-Stand: 13.11.2026 (Phase G — Schaltzentrale vollständig umgesetzt)
+Stand: 13.11.2026 (Phase H — Posteingang-Automatik + CRM)
 
 ## Live
 
@@ -120,11 +120,40 @@ Stand: 13.11.2026 (Phase G — Schaltzentrale vollständig umgesetzt)
   401-Redirect des API-Clients nimmt öffentliche Pfade aus — Gäste werden nicht
   mehr zum Login geschossen
 
+## Phase H — Echter Posteingang, CRM, Kalender-Aktionen (13.11.2026)
+
+Nutzer-Feedback umgesetzt: der Posteingang füllt sich selbst, Kunden bekommen
+eine Historie, Termine sind direkt im Kalender pflegbar, offene Beträge sind
+sichtbar und Vertrags-Fusstexte sind konfigurierbar.
+
+- **E-Mail-Eingang (IMAP-Automatik)**: ungelesene Mails aus dem Postfach
+  (`IMAP_HOST/PORT/USER/PASSWORD/TLS/MAILBOX`-ENVs; Poll alle 2 Min + «Jetzt
+  abholen»-Button) landen als `EmailLog` im Posteingang — Dedupe über
+  Message-ID, Absender wird gegen die Kontakte gematcht (ohne Treffer:
+  automatischer neuer Kontakt + Benachrichtigungs-Mail), Anhänge werden
+  gespeichert (auth-only Download) und beim Übernehmen als Lead-Dateien
+  kopiert; Aktionen: Gelesen / **Als Ankaufsanfrage übernehmen** / Löschen.
+  Ohne IMAP-Konfiguration läuft alles andere normal (Poller deaktiviert).
+- **CRM-Kommunikationshistorie** (`CommunicationLog`): Timeline pro Kunde —
+  manuelle Einträge (Kanal/Richtung/Betreff/Notiz/Fahrzeugbezug), eingehende
+  E-Mails, Webformular-Leads bei Übernahme und Fahrzeug-Anfragen landen
+  automatisch darin. **Kundendetail-Seite** (`/kunden/:id`): Stammdaten mit
+  klickbaren Nummern (`tel:` — Handy: Direktwahl; Mac: Apple Continuity),
+  WhatsApp-Links, An-/Verkäufe, **Rechnungshistorie des Kunden** inkl. offenem
+  Betrag und Zahlungen, Timeline mit Erfassungs-Modal.
+- **Kalender**: Termine direkt anlegen und bearbeiten (Typ, Fahrzeug-Auswahl,
+  Zeit, Kontakt, Notizen) — nicht mehr nur lesend.
+- **Offene Beträge**: `openAmount` je Verkaufsvorgang (Preis + Zusatzleistungen
+  − Eintausch − eingegangene Zahlungen) — **Dashboard-Karte** «Offene Beträge»
+  und amber/grünes Banner im Verkauf-Tab; eine Anzahlung zeigt sofort, wie
+  viel noch fehlt (auch ohne Rechnung).
+- **Vertrags-Fusstext**: `Setting.contractFooterNote` — Fusszeile auf
+  Ankaufsangebot, Ankaufsvertrag und Kaufvertrag ist jetzt in den Einstellungen
+  pflegbar (neben dem Gewährleistungs-Text für § 4).
+
 ## Offen / als Nächstes
 
-- **A Fundament** ✓ · **B Ankauf** ✓ · **C Aufbereitung** ✓ · **D Verkauf-Frontend** ✓ ·
-  **E Abschluss** ✓ · **F Öffentliche Seite** ✓ · **G Doku & Live-Verifikation** ✓
-  (je 13.11.2026, Details oben)
+- **A–H** ✓ (je 13.11.2026, Details oben)
 - **Betreiber-Aufgaben** (siehe README/VPS-ÜBERGABE): eigener QR-IBAN der Bank,
   Impressum mit echten Angaben, SMTP für den PDF-E-Mail-Versand, AS24-Portal-Link,
   Partner-Namen (Werkstatt/Leasing/Garantie) als Stammdaten

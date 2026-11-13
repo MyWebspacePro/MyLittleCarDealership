@@ -157,6 +157,35 @@ export default function Dashboard() {
         </Link>
       </div>
 
+      {(vehicles ?? []).filter((v) => (v.sale?.openAmount ?? 0) > 0).length ? (
+        <Card>
+          <CardHeader
+            title="Offene Beträge"
+            description="Verkaufsvorgänge mit Anzahlung/Teilzahlung — hier fehlt noch Geld (auch ohne Rechnung)."
+          />
+          <div className="divide-y divide-slate-100">
+            {(vehicles ?? [])
+              .filter((v) => (v.sale?.openAmount ?? 0) > 0)
+              .map((v) => (
+                <Link
+                  key={v.id}
+                  to={`/fahrzeuge/${v.id}`}
+                  className="flex flex-wrap items-center gap-2 px-5 py-2.5 text-sm hover:bg-slate-50"
+                >
+                  <span className="rounded-md bg-amber-50 px-2 py-0.5 text-xs font-semibold text-amber-700">Offen</span>
+                  <span className="font-medium text-slate-800">
+                    {v.make} {v.model}
+                  </span>
+                  <span className="text-slate-500">
+                    Verkauft: {chf(v.sale?.salePrice)} · Käufer: {v.sale?.buyerName ?? "—"}
+                  </span>
+                  <span className="ml-auto font-semibold text-amber-700">Noch offen: {chf(v.sale?.openAmount)}</span>
+                </Link>
+              ))}
+          </div>
+        </Card>
+      ) : null}
+
       {overdueInvoices.length || dueReminders.length ? (
         <Card>
           <CardHeader

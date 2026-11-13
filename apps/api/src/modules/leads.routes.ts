@@ -340,6 +340,21 @@ export async function leadRoutes(app: FastifyInstance): Promise<void> {
       where: { id },
       data: { status: "UEBERNOMMEN", vehicleId: vehicle.id },
     });
+    // CRM-Historie: der Lead (Erstkontakt) erscheint in der Kunden-Timeline.
+    if (contactId) {
+      await prisma.communicationLog.create({
+        data: {
+          contactId,
+          vehicleId: vehicle.id,
+          channel: lead.channel,
+          direction: "EINGANG",
+          subject: `Ankaufsanfrage (${lead.channel})`,
+          body: lead.message,
+          source: lead.channel === "WEBFORM" ? "WEBFORM" : "MANUAL",
+          createdById: req.user!.id,
+        },
+      });
+    }
     await audit(req.user!.id, "CONVERT", "PurchaseLead", id, { vehicleId: vehicle.id, dealId: deal.id });
     return reply.code(201).send({ vehicleId: vehicle.id, dealId: deal.id });
   });

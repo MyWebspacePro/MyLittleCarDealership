@@ -107,6 +107,9 @@ const vehicleListInclude = {
       salePrice: true,
       paymentMethod: true,
       buyer: { select: { type: true, firstName: true, lastName: true, companyName: true } },
+      tradeInCredit: true,
+      addons: { select: { price: true } },
+      payments: { select: { direction: true, amount: true } },
     },
   },
 } satisfies Prisma.VehicleInclude;
@@ -193,15 +196,48 @@ function serializeVehicleList(v: VehicleListRow) {
           sellerName: v.purchase.seller ? contactDisplayName(v.purchase.seller) : null,
         }
       : null,
-    sale: v.sale
-      ? {
-          id: v.sale.id,
-          status: v.sale.status,
-          salePrice: n(v.sale.salePrice),
-          paymentMethod: v.sale.paymentMethod,
-          buyerName: v.sale.buyer ? contactDisplayName(v.sale.buyer) : null,
-        }
-      : null,
+    sale: v.sale ? serializeSaleSummary(v.sale) : null,
+  };
+}
+
+/**
+ * Offener Betrag eines Verkaufsvorgangs: Verkaufspreis + Zusatzleistungen
+ * − Eintausch-Abzug − eingegangene Zahlungen. Damit meldet das System nach
+ * einer Anzahlung, wie viel noch fehlt (ohne dass eine Rechnung nötig ist).
+ */
+function openAmountOf(sale: {
+  salePrice: unknown;
+  tradeInCredit: unknown;
+  addons: { price: unknown }[];
+  payments: { direction: string; amount: unknown }[];
+}): number | null {
+  const salePrice = sale.salePrice != null ? Number(sale.salePrice) : null;
+  if (salePrice == null) return null;
+  const addons = sale.addons.reduce((sum, a) => sum + Number(a.price ?? 0), 0);
+  const tradeIn = sale.tradeInCredit != null ? Number(sale.tradeInCredit) : 0;
+  const paid = sale.payments
+    .filter((p) => p.direction === "EINGANG")
+    .reduce((sum, p) => sum + Number(p.amount), 0);
+  return Math.max(0, Math.round((salePrice + addons - tradeIn - paid) * 100) / 100);
+}
+
+function serializeSaleSummary(sale: {
+  id: string;
+  status: string;
+  salePrice: Prisma.Decimal | null;
+  paymentMethod: string;
+  buyer: { type: "PRIVAT" | "FIRMA"; firstName: string | null; lastName: string | null; companyName: string | null } | null;
+  tradeInCredit: unknown;
+  addons: { price: unknown }[];
+  payments: { direction: string; amount: unknown }[];
+}) {
+  return {
+    id: sale.id,
+    status: sale.status,
+    salePrice: n(sale.salePrice),
+    paymentMethod: sale.paymentMethod,
+    buyerName: sale.buyer ? contactDisplayName(sale.buyer) : null,
+    openAmount: openAmountOf(sale),
   };
 }
 
@@ -244,10 +280,9 @@ function serializeVehicleDetail(v: VehicleDetailRow) {
       : null,
     sale: s
       ? {
-          id: s.id,
+          ...serializeSaleSummary(s),
           vehicleId: s.vehicleId,
           buyerId: s.buyerId,
-          buyerName: s.buyer ? contactDisplayName(s.buyer) : null,
           status: s.status,
           salePrice: n(s.salePrice),
           paymentMethod: s.paymentMethod,

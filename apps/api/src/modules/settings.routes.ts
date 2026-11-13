@@ -24,6 +24,7 @@ const settingSchema = z.object({
   qrIban: z.string().max(34).default(""),
   as24PortalUrl: z.string().max(300).default(""),
   warrantyText: z.string().max(4000).default(""),
+  contractFooterNote: z.string().max(500).default(""),
   targetProfitDefault: z.coerce.number().min(0).default(0),
 });
 

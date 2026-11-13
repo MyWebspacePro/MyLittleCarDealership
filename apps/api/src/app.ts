@@ -21,6 +21,8 @@ import { inquiryRoutes } from "./modules/inquiries.routes.js";
 import { appointmentRoutes } from "./modules/appointments.routes.js";
 import { salesRoutes } from "./modules/sales.routes.js";
 import { publicRoutes } from "./modules/public.routes.js";
+import { emailRoutes } from "./modules/emails.routes.js";
+import { communicationRoutes } from "./modules/communications.routes.js";
 import { mediaRoutes } from "./modules/media.routes.js";
 
 export async function buildApp() {
@@ -106,6 +108,8 @@ export async function buildApp() {
   await app.register(inquiryRoutes, { prefix: "/api" });
   await app.register(appointmentRoutes, { prefix: "/api" });
   await app.register(salesRoutes, { prefix: "/api" });
+  await app.register(emailRoutes, { prefix: "/api" });
+  await app.register(communicationRoutes, { prefix: "/api" });
 
   return app;
 }

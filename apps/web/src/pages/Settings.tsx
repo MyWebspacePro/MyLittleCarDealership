@@ -25,6 +25,7 @@ const schema = z.object({
   qrIban: z.string().max(34),
   as24PortalUrl: z.string().max(300),
   warrantyText: z.string().max(4000),
+  contractFooterNote: z.string().max(500),
   targetProfitDefault: z.number({ invalid_type_error: "Zahl eingeben" }).min(0),
   paymentDays: z.number({ invalid_type_error: "Zahl eingeben" }).int().min(0).max(365),
 });
@@ -46,6 +47,7 @@ const FALLBACK: Values = {
   qrIban: "",
   as24PortalUrl: "",
   warrantyText: "",
+  contractFooterNote: "",
   targetProfitDefault: 0,
   paymentDays: 30,
 };
@@ -192,10 +194,20 @@ export default function Settings() {
                 <Field label="Standard-Zielgewinn (CHF)" hint="Flosse in der Ankaufs-Empfehlung, wenn kein Zielgewinn erfasst ist">
                   <Input type="number" min={0} step={100} {...register("targetProfitDefault", { valueAsNumber: true })} />
                 </Field>
-                <Field label="Gewährleistungs-Text" hint="§ 4 im Kaufvertrag — leer = Standardtext «wie besichtigt»">
+                <Field label="Gewährleistungs-Text" hint="§ 4 in Ankaufs- und Kaufvertrag — leer = Standardtext «wie besichtigt»">
                   <textarea
                     rows={4}
                     {...register("warrantyText")}
+                    className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-slate-500 focus:outline-none focus:ring-2 focus:ring-slate-900/10"
+                  />
+                </Field>
+                <Field
+                  label="Fusszeile auf Vertrags-PDFs"
+                  hint="Text ganz unten auf Ankaufsangebot, Ankaufsvertrag und Kaufvertrag — leer = Standardtext"
+                >
+                  <textarea
+                    rows={3}
+                    {...register("contractFooterNote")}
                     className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-slate-500 focus:outline-none focus:ring-2 focus:ring-slate-900/10"
                   />
                 </Field>

@@ -290,6 +290,7 @@ export interface SaleDeal {
   tradeInDescription: string | null;
   soldAt: string | null;
   notes: string | null;
+  openAmount: number | null;
   addons: SaleAddon[];
   payments: PaymentInfo[];
   invoices: InvoiceInfo[];
@@ -405,6 +406,7 @@ export interface VehicleListItem extends VehicleBase {
     salePrice: number | null;
     paymentMethod: SalePaymentMethod;
     buyerName: string | null;
+    openAmount: number | null;
   } | null;
 }
 
@@ -719,4 +721,119 @@ export function whatsappLink(phone: string): string {
 
 export function formatDateTime(value: string): string {
   return new Intl.DateTimeFormat("de-CH", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value));
+}
+
+// ── Phase H: Posteingang-E-Mails + CRM-Kommunikationshistorie ────────────────
+
+export type EmailStatus = "NEU" | "GESEHEN" | "ZUGEORDNET";
+
+export const EMAIL_STATUS_LABELS: Record<EmailStatus, string> = {
+  NEU: "Neu",
+  GESEHEN: "Gesehen",
+  ZUGEORDNET: "Zugeordnet",
+};
+
+export const EMAIL_STATUS_STYLES: Record<EmailStatus, string> = {
+  NEU: "bg-amber-100 text-amber-700",
+  GESEHEN: "bg-slate-100 text-slate-600",
+  ZUGEORDNET: "bg-emerald-100 text-emerald-700",
+};
+
+export interface EmailLogInfo {
+  id: string;
+  fromName: string | null;
+  fromEmail: string;
+  subject: string | null;
+  body: string | null;
+  receivedAt: string;
+  status: EmailStatus;
+  isNewContact: boolean;
+  attachments: string[];
+  contactId: string | null;
+  contactName: string | null;
+}
+
+export type CommunicationDirection = "EINGANG" | "AUSGANG" | "NOTIZ";
+
+export const COMMUNICATION_DIRECTION_LABELS: Record<CommunicationDirection, string> = {
+  EINGANG: "Eingang",
+  AUSGANG: "Ausgang",
+  NOTIZ: "Notiz",
+};
+
+export const COMMUNICATION_DIRECTION_STYLES: Record<CommunicationDirection, string> = {
+  EINGANG: "bg-sky-100 text-sky-700",
+  AUSGANG: "bg-indigo-100 text-indigo-700",
+  NOTIZ: "bg-slate-100 text-slate-600",
+};
+
+export type CommunicationSource = "MANUAL" | "EMAIL" | "WEBFORM";
+
+export const COMMUNICATION_SOURCE_LABELS: Record<CommunicationSource, string> = {
+  MANUAL: "Manuell",
+  EMAIL: "E-Mail",
+  WEBFORM: "Web-Formular",
+};
+
+export interface CommunicationEntry {
+  id: string;
+  contactId: string | null;
+  vehicleId: string | null;
+  vehicleTitle: string | null;
+  channel: PurchaseChannel;
+  direction: CommunicationDirection;
+  subject: string | null;
+  body: string | null;
+  occurredAt: string;
+  source: CommunicationSource;
+  emailLogId: string | null;
+  createdAt: string;
+}
+
+export interface CustomerInvoiceInfo {
+  id: string;
+  number: string;
+  status: InvoiceStatus;
+  isCredit: boolean;
+  subject: string | null;
+  totalAmount: number | null;
+  vatAmount: number | null;
+  issuedAt: string | null;
+  dueAt: string | null;
+  reminderLevel: number;
+  vehicle: { id: string; make: string; model: string; status: string } | null;
+  saleId: string;
+}
+
+export interface CustomerPaymentInfo {
+  id: string;
+  direction: "EINGANG" | "AUSGANG";
+  amount: number;
+  method: string | null;
+  paidAt: string;
+  vehicle: { id: string; make: string; model: string; status: string } | null;
+  saleId: string;
+}
+
+export interface ContactDetail extends Contact {
+  dealCount: number;
+  inquiryCount: number;
+  appointmentCount: number;
+  purchasesAsSeller: {
+    id: string;
+    status: PurchaseStatus;
+    channel: PurchaseChannel;
+    purchasePrice: number | null;
+    createdAt: string;
+    vehicle: { id: string; make: string; model: string; status: string } | null;
+  }[];
+  salesAsBuyer: {
+    id: string;
+    status: SaleStatus;
+    salePrice: number | null;
+    createdAt: string;
+    vehicle: { id: string; make: string; model: string; status: string } | null;
+  }[];
+  invoices: CustomerInvoiceInfo[];
+  payments: CustomerPaymentInfo[];
 }

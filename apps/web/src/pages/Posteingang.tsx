@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import type { FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowRightLeft, Check, Download, Inbox, Plus, Trash2, Upload, X } from "lucide-react";
+import { ArrowRightLeft, Check, Download, Inbox, Mail, MailCheck, Plus, RefreshCw, Trash2, Upload, X } from "lucide-react";
 import { api, apiDownload } from "../lib/api";
 import {
   chf,
@@ -20,6 +20,9 @@ import {
   type LeadListItem,
   type LeadStatus,
   type PurchaseChannel,
+  EMAIL_STATUS_LABELS,
+  EMAIL_STATUS_STYLES,
+  type EmailLogInfo,
 } from "../lib/types";
 import { Alert, Badge, Button, Card, CardHeader, EmptyState, Field, Input, Modal, Select, Spinner } from "../components/ui";
 
@@ -77,6 +80,7 @@ export default function Posteingang() {
   const [convertLead, setConvertLead] = useState<LeadListItem | null>(null);
   const [convertForm, setConvertForm] = useState<ConvertForm | null>(null);
   const [pageError, setPageError] = useState<string | null>(null);
+  const [tab, setEmailTab] = useState<"anfragen" | "emails">("anfragen");
 
   const { data, isLoading } = useQuery({
     queryKey: ["leads"],
@@ -148,6 +152,38 @@ export default function Posteingang() {
       invalidate();
       const refreshed = await api<LeadDetail>(`/leads/${payload.leadId}`);
       setDetailOpen(refreshed);
+    },
+    onError: (err: Error) => setPageError(err.message),
+  });
+
+  // ── E-Mail-Eingang (IMAP-Automatik + manuelles Nachholen) ────────────────
+  const { data: emails, isLoading: emailsLoading } = useQuery({
+    queryKey: ["emails"],
+    queryFn: () => api<EmailLogInfo[]>("/emails"),
+  });
+
+  const fetchNowMutation = useMutation({
+    mutationFn: () => api<{ imported: number; skipped?: string; configured: boolean }>("/emails/fetch-now", { method: "POST" }),
+    onSuccess: (result) => {
+      void queryClient.invalidateQueries({ queryKey: ["emails"] });
+      void queryClient.invalidateQueries({ queryKey: ["contacts"] });
+      setPageError(result.configured ? null : `IMAP nicht konfiguriert: ${result.skipped ?? ""}`);
+    },
+    onError: (err: Error) => setPageError(err.message),
+  });
+
+  const emailSeenMutation = useMutation({
+    mutationFn: (id: string) => api<EmailLogInfo>(`/emails/${id}/seen`, { method: "PUT" }),
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["emails"] }),
+    onError: (err: Error) => setPageError(err.message),
+  });
+
+  const emailConvertMutation = useMutation({
+    mutationFn: (id: string) => api<{ lead: { id: string } }>(`/emails/${id}/convert`, { method: "POST" }),
+    onSuccess: async () => {
+      void queryClient.invalidateQueries({ queryKey: ["emails"] });
+      void queryClient.invalidateQueries({ queryKey: ["leads"] });
+      setEmailTab("anfragen");
     },
     onError: (err: Error) => setPageError(err.message),
   });
@@ -245,16 +281,115 @@ export default function Posteingang() {
             <Inbox size={20} className="text-amber-500" /> Posteingang
           </h1>
           <p className="mt-0.5 text-sm text-slate-500">
-            Ankaufsanfragen aus Web-Formular, WhatsApp und E-Mail — inkl. Fotos und Fahrzeugausweis.
+            Was reinkommt, erscheint von selbst: Web-Formular und E-Mails automatisch — WhatsApp und Telefon protokollierst du hier.
           </p>
         </div>
-        <Button onClick={openCreate}>
-          <Plus size={16} /> Anfrage erfassen
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          {tab === "emails" ? (
+            <Button onClick={() => fetchNowMutation.mutate()} disabled={fetchNowMutation.isPending}>
+              <RefreshCw size={16} className={fetchNowMutation.isPending ? "animate-spin" : ""} />{" "}
+              {fetchNowMutation.isPending ? "Hole …" : "Jetzt abholen"}
+            </Button>
+          ) : null}
+          <Button onClick={openCreate}>
+            <Plus size={16} /> Anfrage erfassen
+          </Button>
+        </div>
       </div>
 
       {pageError ? <Alert>{pageError}</Alert> : null}
 
+      <div className="flex gap-2">
+        {([
+          ["anfragen", `Ankaufsanfragen (${data?.length ?? 0})`],
+          ["emails", `E-Mails${emails?.some((e) => e.status === "NEU") ? " ·" : ""} (${emails?.length ?? 0})`],
+        ] as const).map(([key, label]) => (
+          <button
+            key={key}
+            type="button"
+            onClick={() => setEmailTab(key)}
+            className={`rounded-lg px-3.5 py-2 text-sm font-semibold transition-colors ${
+              tab === key ? "bg-slate-900 text-white" : "bg-white text-slate-600 ring-1 ring-slate-200 hover:bg-slate-50"
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {tab === "emails" ? (
+        <Card>
+          <CardHeader
+            title="E-Mail-Eingang"
+            description="Abgeholt aus dem Postfach (IMAP) — Absender werden automatisch als Kontakt angelegt bzw. zugeordnet und in der Kunden-Historie vermerkt."
+          />
+          {emailsLoading ? (
+            <div className="px-5 py-10">
+              <Spinner label="E-Mails werden geladen …" />
+            </div>
+          ) : (emails ?? []).length === 0 ? (
+            <EmptyState
+              title="Noch keine E-Mails eingegangen"
+              description="Sobald der IMAP-Eingang konfiguriert ist, erscheinen neue E-Mails hier automatisch — oder mit «Jetzt abholen» sofort."
+            />
+          ) : (
+            <div className="divide-y divide-slate-100">
+              {(emails ?? []).map((email) => (
+                <div key={email.id} className="px-5 py-4">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Badge className={EMAIL_STATUS_STYLES[email.status]}>{EMAIL_STATUS_LABELS[email.status]}</Badge>
+                        {email.isNewContact ? (
+                          <Badge className="bg-amber-50 text-amber-700 ring-amber-200">Neuer Kontakt angelegt</Badge>
+                        ) : null}
+                        {email.contactName ? <span className="text-xs text-slate-500">Kontaktverknüpfung: {email.contactName}</span> : null}
+                        <span className="text-[11px] text-slate-400">{formatDate(email.receivedAt)}</span>
+                      </div>
+                      <p className="mt-1.5 font-semibold text-slate-900">{email.subject ?? "(kein Betreff)"}</p>
+                      <p className="text-sm text-slate-600">
+                        {email.fromName ?? "—"} <span className="text-slate-400">&lt;{email.fromEmail}&gt;</span>
+                      </p>
+                      {email.body ? (
+                        <p className="mt-1 line-clamp-3 whitespace-pre-line text-sm text-slate-500">{email.body}</p>
+                      ) : null}
+                      {email.attachments.length ? (
+                        <div className="mt-1.5 flex flex-wrap gap-1.5">
+                          {email.attachments.map((filename, index) => (
+                            <button
+                              key={filename}
+                              type="button"
+                              onClick={() => apiDownload(`/emails/${email.id}/attachments/${index}`, filename)}
+                              className="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-2 py-1 text-xs text-slate-600 hover:bg-slate-50"
+                            >
+                              <Download size={11} /> Anhang {index + 1}
+                            </button>
+                          ))}
+                        </div>
+                      ) : null}
+                    </div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {email.status === "NEU" ? (
+                        <Button size="sm" variant="secondary" onClick={() => emailSeenMutation.mutate(email.id)}>
+                          <MailCheck size={14} /> Gelesen
+                        </Button>
+                      ) : null}
+                      {email.status !== "ZUGEORDNET" ? (
+                        <Button size="sm" onClick={() => emailConvertMutation.mutate(email.id)}>
+                          <Mail size={14} /> Als Ankaufsanfrage übernehmen
+                        </Button>
+                      ) : null}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </Card>
+      ) : null}
+
+      {tab === "anfragen" ? (
+        <>
       <div className="flex flex-wrap gap-2">
         <button
           type="button"
@@ -369,6 +504,8 @@ export default function Posteingang() {
           </div>
         )}
       </Card>
+        </>
+      ) : null}
 
       {/* Neue Anfrage */}
       <Modal open={createOpen} title="Ankaufsanfrage erfassen" description="Erstkontakt inkl. Kontaktdaten und Fahrzeugangaben." onClose={() => setCreateOpen(false)}>
@@ -452,11 +589,23 @@ export default function Posteingang() {
             <div className="grid grid-cols-2 gap-3 text-sm">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Telefon</p>
-                <p className="text-slate-800">{detailOpen.sellerPhone ?? "–"}</p>
+                {detailOpen.sellerPhone ? (
+                  <p className="text-slate-800">
+                    <a href={`tel:${detailOpen.sellerPhone.replace(/\s/g, "")}`} className="hover:underline">{detailOpen.sellerPhone}</a>
+                  </p>
+                ) : (
+                  <p className="text-slate-800">–</p>
+                )}
               </div>
               <div>
                 <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">E-Mail</p>
-                <p className="text-slate-800">{detailOpen.sellerEmail ?? "–"}</p>
+                {detailOpen.sellerEmail ? (
+                  <p className="text-slate-800">
+                    <a href={`mailto:${detailOpen.sellerEmail}`} className="hover:underline">{detailOpen.sellerEmail}</a>
+                  </p>
+                ) : (
+                  <p className="text-slate-800">–</p>
+                )}
               </div>
             </div>
 

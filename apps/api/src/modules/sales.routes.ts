@@ -290,6 +290,9 @@ export async function salesRoutes(app: FastifyInstance): Promise<void> {
       "Das Fahrzeug wird im Zustand «wie besichtigt und probefahren» verkauft. Eine Gewährleistung wird ausdrücklich ausgeschlossen, soweit dies rechtlich zulässig ist. Haftung bleibt vorbehalten für verheimlichte oder zugesicherte Mängel.";
     const now = new Date();
     const tradeIn = sale.tradeInCredit;
+    const footerNote =
+      setting?.contractFooterNote?.trim() ||
+      "Erstellt automatisch mit MyLittleCarDealership. Standardvorlage — keine Rechtsberatung; individuelle Klauseln pflegen Sie in den Einstellungen.";
 
     const buffer = await renderPdf((doc) => {
       const b = new PdfBuilder(doc);
@@ -360,9 +363,7 @@ export async function salesRoutes(app: FastifyInstance): Promise<void> {
       ]);
 
       b.signatures(c.companyName, contactDisplayName(buyer));
-      b.footerNote(
-        "Erstellt automatisch mit MyLittleCarDealership. Standardvorlage — keine Rechtsberatung; individuelle Klauseln pflegen Sie in den Einstellungen.",
-      );
+      b.footerNote(footerNote);
     });
 
     const document = await saveVehicleDocument(id, "KAUFVERTRAG", `Kaufvertrag ${vehicleTitle(vehicle)}`, buffer);

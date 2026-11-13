@@ -121,6 +121,10 @@ export async function documentRoutes(app: FastifyInstance): Promise<void> {
       return reply.code(400).send({ error: "Zuerst einen Ankaufspreis erfassen, dann das Angebot erstellen." });
     }
     const c = await company();
+    const setting = await prisma.setting.findUnique({ where: { id: 1 } });
+    const footerNote =
+      setting?.contractFooterNote?.trim() ||
+      "Erstellt automatisch mit MyLittleCarDealership. Dieses Dokument ist eine Standardvorlage.";
     const now = new Date();
     const buffer = await renderPdf((doc) => {
       const b = new PdfBuilder(doc);
@@ -147,7 +151,7 @@ export async function documentRoutes(app: FastifyInstance): Promise<void> {
         "Sie bestätigen mit Ihrer Unterschrift, dass Sie berechtigt sind, das Fahrzeug zu veräussern, und dass es frei von Rechten Dritter ist.",
       ]);
       b.signatures("Verkäufer/in", c.companyName);
-      b.footerNote("Erstellt automatisch mit MyLittleCarDealership. Dieses Dokument ist eine Standardvorlage.");
+      b.footerNote(footerNote);
     });
     const document = await saveDocument(deal.vehicleId, "ANKAUF_ANGEBOT", `Ankaufsangebot ${vehicleTitle(deal.vehicle)}`, buffer);
     await audit(req.user!.id, "GENERATE", "GeneratedDocument", document.id, { type: "ANKAUF_ANGEBOT", dealId: id });
@@ -166,6 +170,9 @@ export async function documentRoutes(app: FastifyInstance): Promise<void> {
     }
     const c = await company();
     const setting = await prisma.setting.findUnique({ where: { id: 1 } });
+    const footerNote =
+      setting?.contractFooterNote?.trim() ||
+      "Erstellt automatisch mit MyLittleCarDealership. Standardvorlage — keine Rechtsberatung.";
     const now = new Date();
     const handoverDate = deal.purchasedAt ?? now;
     const isTradeIn = deal.paymentMethod === "EINTAUSCH";
@@ -217,7 +224,7 @@ export async function documentRoutes(app: FastifyInstance): Promise<void> {
       b.paragraph("Dieser Vertrag wird in zwei gleichlautenden Ausführungen unterzeichnet; jede Partei erhält eine Ausfertigung.");
 
       b.signatures("Verkäufer/in", `Käufer: ${c.companyName}`);
-      b.footerNote("Erstellt automatisch mit MyLittleCarDealership. Standardvorlage — keine Rechtsberatung.");
+      b.footerNote(footerNote);
     });
     const document = await saveDocument(
       deal.vehicleId,

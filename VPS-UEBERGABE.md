@@ -44,6 +44,11 @@ automatisch via Let's Encrypt.
 - **SMTP** für den PDF-E-Mail-Versand in die `.env` (`SMTP_HOST`, `SMTP_PORT`,
   `SMTP_USER`, `SMTP_PASSWORD`, `SMTP_FROM`) und Container neu starten. Ohne SMTP
   laufen alle Funktionen weiter, Mails werden nur nicht versendet.
+- **IMAP-Eingang** (Posteingang-Automatik): Mailbox-Zugang in die `.env`
+  (`IMAP_HOST`, `IMAP_PORT` default 993, `IMAP_USER`, `IMAP_PASSWORD`,
+  `IMAP_MAILBOX` default INBOX, `IMAP_TLS` default true, `IMAP_POLL_SECONDS`
+  default 120) und Container neu starten. Ohne `IMAP_HOST` bleibt der automatische
+  E-Mail-Eingang deaktiviert; der Button «Jetzt abholen» im Posteingang meldet das.
 - **AutoScout24-Händlerportal-Link** in den Einstellungen hinterlegen (Klick-Link im
   Verkauf-Tab; das Einstellen selbst bleibt manuell).
 

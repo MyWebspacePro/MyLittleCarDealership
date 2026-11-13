@@ -34,8 +34,9 @@ model User {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  sessions  Session[]
-  auditLogs AuditLog[]
+  sessions        Session[]
+  auditLogs       AuditLog[]
+  communications  CommunicationLog[]
   assignedLeads PurchaseLead[]
 }
 
@@ -82,7 +83,8 @@ model Setting {
   as24PortalUrl    String   @default("") // AutoScout24-Händlerportal
   // Standard-Zielgewinn pro Fahrzeug (CHF) für die Ankaufsempfehlung.
   targetProfitDefault Decimal @default(0) @db.Decimal(12, 2)
-  warrantyText     String   @default("") // Gewährleistungs-Standardtext für Verträge
+  warrantyText     String   @default("") // Gewährleistungs-Standardtext für Verträge (§ 4)
+  contractFooterNote String @default("") // Fusszeilen-Text auf Ankaufs-/Kaufvertrags-PDFs
   paymentDays      Int      @default(30)
   updatedAt        DateTime @updatedAt
 }
@@ -132,6 +134,8 @@ model Contact {
   salesAsBuyer      SaleDeal[]
   inquiries         Inquiry[]
   appointments      Appointment[]
+  emailsReceived    EmailLog[]
+  communications    CommunicationLog[]
 
   @@index([lastName])
   @@index([companyName])
@@ -183,6 +187,7 @@ model Vehicle {
   inquiries          Inquiry[]
   appointments       Appointment[]
   generatedDocuments GeneratedDocument[]
+  communications     CommunicationLog[]
   purchaseLead       PurchaseLead?
 
   @@index([status])
@@ -637,4 +642,75 @@ model LeadFile {
   createdAt    DateTime     @default(now())
 
   @@index([leadId])
+}
+
+// ── Posteingang: eingehende E-Mails (IMAP-Automatik, Phase H) ────────────────
+
+// Jede abgeholt E-Mail landet hier — Dedupe über die Message-ID. Der
+// Absender wird beim Eintreffen gegen die Kontakte gematcht; ohne Treffer
+// entsteht automatisch ein neuer Kontakt.
+enum EmailStatus {
+  NEU
+  GESEHEN
+  ZUGEORDNET
+}
+
+model EmailLog {
+  id          String      @id @default(cuid())
+  messageId   String      @unique // RFC-822 Message-ID, verhindert Doppel-Import
+  fromName    String?
+  fromEmail   String
+  subject     String?
+  body        String?     @db.Text
+  receivedAt  DateTime
+  status      EmailStatus @default(NEU)
+  contact     Contact?    @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  contactId   String?
+  isNewContact Boolean    @default(false) // Kontakt wurde beim Import neu angelegt
+  attachments String[]    @default([]) // Dateinamen unter uploads/email-attachments/
+  communications CommunicationLog[]
+
+  createdAt   DateTime    @default(now())
+
+  @@index([status])
+  @@index([receivedAt])
+}
+
+// ── CRM: Kommunikationshistorie pro Kontakt (Phase H) ────────────────────────
+
+// Alles, was mit einem Kunden passiert: manuelle Protokolle, eingehende
+// E-Mails, Webformular-Leads und Fahrzeug-Anfragen — eine Timeline.
+enum CommunicationDirection {
+  EINGANG
+  AUSGANG
+  NOTIZ
+}
+
+enum CommunicationSource {
+  MANUAL
+  EMAIL
+  WEBFORM
+}
+
+model CommunicationLog {
+  id             String                 @id @default(cuid())
+  contact        Contact?               @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  contactId      String?
+  vehicle        Vehicle?               @relation(fields: [vehicleId], references: [id], onDelete: SetNull)
+  vehicleId      String?
+  channel        InquiryChannel         @default(TELEFON)
+  direction      CommunicationDirection @default(NOTIZ)
+  subject        String?
+  body           String?                @db.Text
+  occurredAt     DateTime               @default(now())
+  source         CommunicationSource    @default(MANUAL)
+  emailLog       EmailLog?              @relation(fields: [emailLogId], references: [id], onDelete: SetNull)
+  emailLogId     String?
+  createdBy      User?                  @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  createdById    String?
+  createdAt      DateTime               @default(now())
+
+  @@index([contactId])
+  @@index([vehicleId])
+  @@index([occurredAt])
 }

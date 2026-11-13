@@ -64,6 +64,21 @@ export async function inquiryRoutes(app: FastifyInstance): Promise<void> {
       },
       include: { contact: contactInclude },
     });
+    // CRM-Historie: Fahrzeug-Anfrage erscheint auch in der Kunden-Timeline.
+    if (inquiry.contactId) {
+      await prisma.communicationLog.create({
+        data: {
+          contactId: inquiry.contactId,
+          vehicleId: id,
+          channel: inquiry.channel,
+          direction: "NOTIZ",
+          subject: inquiry.subject,
+          body: inquiry.summary,
+          source: "MANUAL",
+          createdById: req.user!.id,
+        },
+      });
+    }
     await audit(req.user!.id, "CREATE", "Inquiry", inquiry.id, { vehicleId: id, channel: inquiry.channel });
     return reply.code(201).send(withContact(inquiry));
   });

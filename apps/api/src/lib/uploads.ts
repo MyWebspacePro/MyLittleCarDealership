@@ -14,6 +14,8 @@ export const LEADS_PHOTOS_DIR = path.join(UPLOADS_DIR, "leads", "photos");
 export const LEADS_DOCS_DIR = path.join(UPLOADS_DIR, "leads", "docs");
 // Server-generierte PDFs (Angebote, Verträge, Rechnungen, Tafeln …) — privat.
 export const DOCUMENTS_DIR = path.join(UPLOADS_DIR, "documents");
+// Anhänge eingehender E-Mails (IMAP-Posteingang) — privat, nur authentifiziert.
+export const EMAIL_ATTACHMENTS_DIR = path.join(UPLOADS_DIR, "email-attachments");
 
 export const MAX_FILE_BYTES = 8 * 1024 * 1024; // 8 MB pro Datei
 
