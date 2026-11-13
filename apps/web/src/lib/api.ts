@@ -74,10 +74,13 @@ export async function api<T>(path: string, options: RequestInit = {}, retry = tr
       return api<T>(path, options, false);
     }
     clearTokens();
-    // Nur umleiten, wenn wir nicht schon auf /login sind. Sonst:
-    // /auth/me scheitert -> Redirect auf /login -> Seite laedt neu ->
-    // AuthProvider prueft erneut -> Redirect ... (flackernde Endlosschleife).
-    if (window.location.pathname !== "/login") {
+    // Nur umleiten, wenn wir nicht schon auf /login oder einer öffentlichen
+    // Seite sind. Sonst: /auth/me scheitert -> Redirect auf /login -> Seite
+    // laedt neu -> AuthProvider prueft erneut ... (flackernde Endlosschleife);
+    // Gäste auf Landing/Börse/Ankauffsformular sollen nicht zum Login springen.
+    const PUBLIC_PATHS = new Set(["/", "/ankauf", "/boerse", "/impressum", "/datenschutz"]);
+    const path401 = window.location.pathname;
+    if (path401 !== "/login" && !PUBLIC_PATHS.has(path401)) {
       window.location.href = "/login";
     }
     throw new ApiError(401, "Sitzung abgelaufen");

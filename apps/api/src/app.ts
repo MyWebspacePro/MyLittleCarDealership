@@ -20,6 +20,7 @@ import { workOrderRoutes } from "./modules/workorders.routes.js";
 import { inquiryRoutes } from "./modules/inquiries.routes.js";
 import { appointmentRoutes } from "./modules/appointments.routes.js";
 import { salesRoutes } from "./modules/sales.routes.js";
+import { publicRoutes } from "./modules/public.routes.js";
 import { mediaRoutes } from "./modules/media.routes.js";
 
 export async function buildApp() {
@@ -43,7 +44,9 @@ export async function buildApp() {
   // Foto-/Dokument-Uploads (ein File pro Request; bodyLimit oben deckt 8 MB
   // pro Datei ab). Multipart-Errors (zu gross, falscher Typ) laufen in den
   // zentralen Error-Handler.
-  await app.register(multipart, { limits: { files: 1, fileSize: 8 * 1024 * 1024 } });
+  // Bis zu 9 Dateien pro Upload (Fotos + Ausweis beim Ankauffsformular),
+  // je max. 8 MB.
+  await app.register(multipart, { limits: { files: 9, fileSize: 8 * 1024 * 1024 } });
 
   const corsOrigins = env.CORS_ORIGINS.split(",")
     .map((o) => o.trim())
@@ -88,6 +91,8 @@ export async function buildApp() {
   // Öffentliche Foto-Auslieferung (kein Login; ohne /api-Präfix, weil nginx
   // /uploads/ direkt hierher weiterleitet).
   await app.register(mediaRoutes);
+  // Öffentliche Seite: Fahrzeugbörse + Ankaufsformular (kein Login).
+  await app.register(publicRoutes, { prefix: "/api" });
   await app.register(authRoutes, { prefix: "/api/auth" });
   await app.register(userRoutes, { prefix: "/api" });
   await app.register(settingsRoutes, { prefix: "/api" });

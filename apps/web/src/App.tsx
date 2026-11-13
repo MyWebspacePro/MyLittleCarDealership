@@ -1,4 +1,4 @@
-import { Navigate, Route, Routes } from "react-router-dom";
+import { Navigate, Outlet, Route, Routes } from "react-router-dom";
 import Layout from "./components/Layout";
 import { Spinner } from "./components/ui";
 import { useAuth } from "./lib/auth";
@@ -13,6 +13,11 @@ import Posteingang from "./pages/Posteingang";
 import Profile from "./pages/Profile";
 import Settings from "./pages/Settings";
 import Users from "./pages/Users";
+import PublicLayout from "./pages/public/PublicLayout";
+import Landing from "./pages/public/Landing";
+import Ankauf from "./pages/public/Ankauf";
+import Boerse from "./pages/public/Board";
+import { Datenschutz, Impressum } from "./pages/public/Legal";
 
 function Protected() {
   const { user, loading } = useAuth();
@@ -27,12 +32,39 @@ function Protected() {
   return <Layout />;
 }
 
+// Startseite: eingeloggt → interne Schaltzentrale, sonst → öffentliches Landing.
+function HomeRoute() {
+  const { user, loading } = useAuth();
+  if (loading) {
+    return (
+      <div className="grid min-h-screen place-items-center">
+        <Spinner label="Sitzung wird geprüft …" />
+      </div>
+    );
+  }
+  return user ? <Dashboard /> : <PublicLayout><Landing /></PublicLayout>;
+}
+
+function PublicShell() {
+  return (
+    <PublicLayout>
+      <Outlet />
+    </PublicLayout>
+  );
+}
+
 export default function App() {
   return (
     <Routes>
       <Route path="/login" element={<Login />} />
+      <Route path="/" element={<HomeRoute />} />
+      <Route element={<PublicShell />}>
+        <Route path="ankauf" element={<Ankauf />} />
+        <Route path="boerse" element={<Boerse />} />
+        <Route path="impressum" element={<Impressum />} />
+        <Route path="datenschutz" element={<Datenschutz />} />
+      </Route>
       <Route element={<Protected />}>
-        <Route index element={<Dashboard />} />
         <Route path="posteingang" element={<Posteingang />} />
         <Route path="fahrzeuge" element={<Fahrzeuge />} />
         <Route path="fahrzeuge/:id" element={<FahrzeugDetail />} />

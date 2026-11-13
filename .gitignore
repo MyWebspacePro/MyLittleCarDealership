@@ -16,6 +16,6 @@ data/
 
 *.log
 .DS_Store
-.zcode/*.tsbuildinfo
 
 *.tsbuildinfo
+.zcode/

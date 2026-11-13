@@ -1,6 +1,6 @@
 # Projekt-Status
 
-Stand: 13.11.2026 (Phase E der Schaltzentrale)
+Stand: 13.11.2026 (Phase F der Schaltzentrale)
 
 ## Live
 
@@ -97,13 +97,33 @@ Stand: 13.11.2026 (Phase E der Schaltzentrale)
 - Demo-Seed erweitert: Golf mit 8 Ausstattungsmerkmalen + AS24-Link, 2 Anfragen,
   Probefahrt/Besichtigung mit kalenderstabilen Terminen (morgen 14:00 / übermorgen 10:00)
 
-## Offen / als Nächstes (Phasen F–G)
+## Phase F — Öffentliche Seite (13.11.2026)
+
+- **Fahrzeugbörse** (`/boerse`, ohne Login): Fahrzeuge in Verkauf/Aufbereitung —
+  nur Inseratsdaten (Titel, Preis, EZ, km, Treibstoff/Getriebe, Beschreibung,
+  Ausstattung, Titelbild); **keine** Gewinn-/Ankaufsdaten; Aufbereitungsfahrzeuge
+  mit «in Aufbereitung»-Badge; öffentliche API `GET /api/public/board`
+- **Ankauffsformular** (`/ankauf`, ohne Login): Kontaktdaten, Fahrzeugangaben,
+  Preisvorstellung, Nachricht, **bis zu 8 Fotos + Fahrzeugausweis** (Upload,
+  8 MB je Datei) — landet als Lead im internen Posteingang (Status NEU,
+  Kanal WEBFORM) und löst eine **E-Mail-Benachrichtigung** an den Betrieb aus
+  (SMTP; ohne SMTP-Konfiguration bleibt die Anfrage trotzdem sicher im System).
+  Missbrauchsschutz: **Honeypot-Feld** (gefüllt → 400) und **IP-Rate-Limit**
+  (5 Anfragen/Stunde), **nDSG-Einwilligung zwingend** (Checkbox → Datenschutzerklärung)
+- **Landing** (`/`): eingeloggt → interne Schaltzentrale, ausgeloggt → öffentliche
+  Landingpage mit Hero, Börse-Teaser und Ankauf-CTA; öffentliches Layout mit
+  Navigation und Fusszeile (Impressum/Datenschutz/Login)
+- **Impressum & Datenschutzerklärung** (`/impressum`, `/datenschutz`): Platzhalter-
+  Texte gemäss Schweizer Praxis (nDSG, Aufbewahrung 10 Jahre, GwG-Hinweis bei
+  Barzahlung ≥ 100'000) — der Händler ersetzt Name/Adresse/UID durch seine Daten
+- Multipart-Limit auf 9 Dateien erhöht (Ankauffsformular: Fotos + Ausweis);
+  401-Redirect des API-Clients nimmt öffentliche Pfade aus — Gäste werden nicht
+  mehr zum Login geschossen
+
+## Offen / als Nächstes (Phase G)
 - **A Fundament** ✓ · **B Ankauf** ✓ · **C Aufbereitung** ✓ · **D Verkauf-Frontend** ✓ ·
-  **E Abschluss** ✓ (je 13.11.2026, Details oben)
-- **F Öffentliche Seite**: Landing + Ankaufsformular (Uploads, nDSG-Einwilligung,
-  Rate-Limit/Honeypot) + Fahrzeugbörse (Verkaufsfahrzeuge öffentlich, Anfrage-Button
-  schreibt Anfrage ins System) + Impressum/Datenschutz
-- **G**: Demo-Seed 1:1 VPS, Doku-Finalisierung
+  **E Abschluss** ✓ · **F Öffentliche Seite** ✓ (je 13.11.2026, Details oben)
+- **G**: Doku-Finalisierung (README/VPS-ÜBERGABE), End-to-End live verifizieren
 
 ## Verifiziert
 
@@ -137,6 +157,18 @@ Stand: 13.11.2026 (Phase E der Schaltzentrale)
   QR-Rechnung erstellen, Mahn-Stufe 1, GwG-Box im Zahlungs-Modal + Speichern mit
   Badge, Rechnung automatisch «Bezahlt», Auswertungs-KPIs, CSV-Button,
   Settings mit QR-IBAN-Feld, Navigation Auswertungen
+
+**Phase F**
+- API (dev + Docker-Vollstack über nginx): `/api/public/board` ohne Login (2
+  Fahrzeuge), Lead-Submit mit Foto + Fahrzeugausweis → Posteingang NEU,
+  Honeypot gefüllt → 400, fehlende Einwilligung → 400, Lead-Benachrichtigung
+  in Mailhog, Test-Lead wieder entfernt — 401 auf internen Routen bleibt
+- UI (Playwright, 11/11): Landing für Gäste (kein internes «Willkommen zurück»),
+  Börse mit Preisen und Aufbereitung-Badge ohne Gewinndaten, Ankauffsformular
+  mit Upload + Erfolgsseite, Lead im internen Posteingang, Login → Dashboard,
+  Impressum/Datenschutz mit GwG-Hinweis
+- Lokal = VPS: Datenstand per state-check verglichen (Leads, Fahrzeuge,
+  Dokumente, Rechnungen identisch)
 
 Jede Phase: `npm run build` (tsc beider Apps + Vite) fehlerfrei; UI-Tests mobil und
 Desktop; Docker-Vollstack danach `down -v`.
