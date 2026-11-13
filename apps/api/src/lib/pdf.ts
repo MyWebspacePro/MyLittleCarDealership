@@ -35,8 +35,16 @@ export function formatDateDe(date: Date): string {
 }
 
 /** PDF in den Speicher rendern; der Builder zeichnet direkt auf das Dokument. */
-export function renderPdf(build: (doc: PDFKit.PDFDocument) => void): Promise<Buffer> {
-  const doc = new PDFDocument({ size: "A4", margin: MARGIN, info: { Creator: "MyLittleCarDealership" } });
+export function renderPdf(
+  build: (doc: PDFKit.PDFDocument) => void,
+  opts: { size?: string; layout?: "portrait" | "landscape" } = {},
+): Promise<Buffer> {
+  const doc = new PDFDocument({
+    size: opts.size ?? "A4",
+    layout: opts.layout ?? "portrait",
+    margin: MARGIN,
+    info: { Creator: "MyLittleCarDealership" },
+  });
   const chunks: Buffer[] = [];
   doc.on("data", (c: Buffer) => chunks.push(c));
   const done = new Promise<Buffer>((resolve) => doc.on("end", () => resolve(Buffer.concat(chunks))));

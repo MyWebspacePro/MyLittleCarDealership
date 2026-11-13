@@ -35,6 +35,10 @@ export default function Dashboard() {
   const newLeads = (leads ?? []).filter((l) => l.status === "NEU").length;
   const forSale = (vehicles ?? []).filter((v) => v.status === "VERKAUF").length;
   const inPrep = (vehicles ?? []).filter((v) => v.status === "AUFBEREITUNG" || v.status === "GEKAUFT").length;
+  // Bewegungsmessung: längste Standtage im aktiven Bestand.
+  const slowest = (vehicles ?? [])
+    .filter((v) => v.status === "VERKAUF" || v.status === "AUFBEREITUNG")
+    .sort((a, b) => b.daysInStatus - a.daysInStatus)[0];
   const active = users?.filter((u) => u.active).length ?? 0;
   const roleCount = (role: string) => users?.filter((u) => u.role === role).length ?? 0;
   const date = new Date().toLocaleDateString("de-CH", {
@@ -127,6 +131,11 @@ export default function Dashboard() {
             <p className="mt-1 text-xs text-slate-500">
               {forSale} im Verkauf · {inPrep} in Aufbereitung
             </p>
+            {slowest ? (
+              <p className={`mt-2 text-xs font-medium ${slowest.daysInStatus > 60 ? "text-rose-600" : slowest.daysInStatus > 30 ? "text-amber-600" : "text-slate-500"}`}>
+                Längster im Bestand: {slowest.daysInStatus} Tage ({slowest.make} {slowest.model})
+              </p>
+            ) : null}
           </Card>
         </Link>
       </div>

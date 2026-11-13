@@ -1,5 +1,5 @@
 import { NavLink, Outlet } from "react-router-dom";
-import { Car, CarFront, Inbox, LayoutDashboard, LogOut, Settings, UserRound, Users, UsersRound } from "lucide-react";
+import { Car, CarFront, CalendarDays, Inbox, LayoutDashboard, LogOut, Settings, UserRound, Users, UsersRound } from "lucide-react";
 import { useAuth } from "../lib/auth";
 import { ROLE_LABELS } from "../lib/types";
 
@@ -8,6 +8,7 @@ const navigation = [
   { to: "/posteingang", label: "Posteingang", icon: Inbox, end: false },
   { to: "/fahrzeuge", label: "Fahrzeuge", icon: CarFront, end: false },
   { to: "/kunden", label: "Kunden", icon: UsersRound, end: false },
+  { to: "/kalender", label: "Kalender", icon: CalendarDays, end: false },
   { to: "/users", label: "Team", icon: Users, end: false },
   { to: "/settings", label: "Einstellungen", icon: Settings, end: false },
   { to: "/profile", label: "Mein Profil", icon: UserRound, end: false },

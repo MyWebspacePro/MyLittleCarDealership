@@ -294,34 +294,15 @@ export interface VehicleListItem extends VehicleBase {
 
 export interface VehicleDetail extends VehicleBase {
   description: string | null;
+  equipment: string[];
   photos: VehiclePhoto[];
   documents: VehicleDocument[];
   purchase: PurchaseDeal | null;
   sale: SaleDeal | null;
   generatedDocuments: GeneratedDocumentInfo[];
   workOrders: WorkOrder[];
-  inquiries: {
-    id: string;
-    vehicleId: string | null;
-    contactId: string | null;
-    channel: string;
-    subject: string | null;
-    summary: string | null;
-    nextFollowUpAt: string | null;
-    resolvedAt: string | null;
-    createdAt: string;
-  }[];
-  appointments: {
-    id: string;
-    vehicleId: string | null;
-    contactId: string | null;
-    type: string;
-    title: string;
-    startsAt: string;
-    endsAt: string | null;
-    status: string;
-    notes: string | null;
-  }[];
+  inquiries: Inquiry[];
+  appointments: Appointment[];
 }
 
 export function chf(value: number | null | undefined): string {
@@ -506,4 +487,120 @@ export interface WorkOrder {
   completedAt: string | null;
   notes: string | null;
   createdAt: string;
+}
+
+// ── Verkauf: Anfragen & Termine ──────────────────────────────────────────────
+
+// Katalog der wichtigsten Sonderausstattungen für die Klick-Maske
+// (Tafel + Exposé + AutoScout24-Vorbereitung).
+export const EQUIPMENT_CATALOG: string[] = [
+  "ABS",
+  "Adaptive Cruise Control (ACC)",
+  "Airbag",
+  "Allradantrieb",
+  "Anhängerkupplung",
+  "Berganfahrhilfe",
+  "Bluetooth / Freisprecheinrichtung",
+  "Dachreling",
+  "Einparkhilfe",
+  "Elektr. Fensterheber",
+  "Elektr. Heckklappe",
+  "Elektr. Sitze",
+  "Head-Up Display",
+  "Isofix",
+  "Klimaanlage",
+  "Kurvenlicht",
+  "LED / Matrix-LED Scheinwerfer",
+  "Lederlenkrad",
+  "Leichtmetallfelgen",
+  "Multifunktionslenkrad",
+  "Navi & App-Connect",
+  "Panorama-Glasdach",
+  "Regensensor",
+  "Rückfahrkamera",
+  "Sitzheizung",
+  "Sportsitze",
+  "Start/Stopp-Automatik",
+  "Tempomat",
+  "Winterräder",
+  "Zentralverriegelung",
+];
+
+export interface ContactRef {
+  id: string;
+  displayName: string;
+  phone: string | null;
+  mobile: string | null;
+  email: string | null;
+}
+
+export interface Inquiry {
+  id: string;
+  vehicleId: string | null;
+  contactId: string | null;
+  contact: ContactRef | null;
+  contactName: string | null;
+  channel: PurchaseChannel;
+  subject: string | null;
+  summary: string | null;
+  nextFollowUpAt: string | null;
+  resolvedAt: string | null;
+  createdAt: string;
+}
+
+export type AppointmentType = "BESICHTIGUNG" | "PROBEFAHRT" | "RUECKRUF" | "WERKSTATT" | "SONSTIGES";
+
+export const APPOINTMENT_TYPES = Object.keys({
+  BESICHTIGUNG: "",
+  PROBEFAHRT: "",
+  RUECKRUF: "",
+  WERKSTATT: "",
+  SONSTIGES: "",
+}) as AppointmentType[];
+
+export const APPOINTMENT_TYPE_LABELS: Record<AppointmentType, string> = {
+  BESICHTIGUNG: "Besichtigung",
+  PROBEFAHRT: "Probefahrt",
+  RUECKRUF: "Rückruf",
+  WERKSTATT: "Werkstatt",
+  SONSTIGES: "Sonstiges",
+};
+
+export type AppointmentStatus = "GEPLANT" | "ERLEDIGT" | "ABGESAGT";
+
+export const APPOINTMENT_STATUS_LABELS: Record<AppointmentStatus, string> = {
+  GEPLANT: "Geplant",
+  ERLEDIGT: "Erledigt",
+  ABGESAGT: "Abgesagt",
+};
+
+export const APPOINTMENT_STATUS_STYLES: Record<AppointmentStatus, string> = {
+  GEPLANT: "bg-blue-50 text-blue-700 ring-blue-200",
+  ERLEDIGT: "bg-emerald-50 text-emerald-700 ring-emerald-200",
+  ABGESAGT: "bg-slate-100 text-slate-500 ring-slate-200",
+};
+
+export interface Appointment {
+  id: string;
+  vehicleId: string | null;
+  vehicle: { id: string; make: string; model: string; status: VehicleStatus } | null;
+  contactId: string | null;
+  contact: ContactRef | null;
+  type: AppointmentType;
+  title: string;
+  startsAt: string;
+  endsAt: string | null;
+  status: AppointmentStatus;
+  notes: string | null;
+}
+
+/** Swiss Telefonnummer -> wa.me-Link (079… -> 4179…). */
+export function whatsappLink(phone: string): string {
+  const digits = phone.replace(/\D/g, "");
+  const intl = digits.startsWith("0") ? `41${digits.slice(1)}` : digits;
+  return `https://wa.me/${intl}`;
+}
+
+export function formatDateTime(value: string): string {
+  return new Intl.DateTimeFormat("de-CH", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value));
 }

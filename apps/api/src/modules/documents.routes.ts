@@ -3,6 +3,7 @@ import { stat } from "node:fs/promises";
 import path from "node:path";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
+import QRCode from "qrcode";
 import { prisma } from "../lib/prisma.js";
 import { audit } from "../lib/audit.js";
 import { authGuard } from "../plugins/auth.js";
@@ -82,7 +83,7 @@ function sellerAddressLines(seller: {
 
 async function saveDocument(
   vehicleId: string,
-  documentType: "ANKAUF_ANGEBOT" | "ANKAUF_VERTRAG",
+  documentType: "ANKAUF_ANGEBOT" | "ANKAUF_VERTRAG" | "TAFAEL",
   title: string,
   buffer: Buffer,
 ) {
@@ -224,6 +225,106 @@ export async function documentRoutes(app: FastifyInstance): Promise<void> {
       buffer,
     );
     await audit(req.user!.id, "GENERATE", "GeneratedDocument", document.id, { type: "ANKAUF_VERTRAG", dealId: id });
+    return reply.code(201).send(document);
+  });
+
+  // ── A3-Quer-Tafel für die Windschutzscheibe (immer gleiches Schema:
+  //    Logo/Firma, Preis, Fahrzeugdaten, Beschreibung, Ausstattung, QR) ─────
+
+  app.post("/vehicles/:id/board-pdf", { preHandler: authGuard }, async (req, reply) => {
+    const { id } = z.object({ id: z.string().min(1) }).parse(req.params);
+    const vehicle = await prisma.vehicle.findUnique({ where: { id } });
+    if (!vehicle) return reply.code(404).send({ error: "Fahrzeug nicht gefunden" });
+    const { price } = z
+      .object({
+        price: z.preprocess((v) => (v === "" || v === null ? null : v), z.coerce.number().min(0).nullable().optional()),
+      })
+      .parse(req.body ?? {});
+    const displayPrice = price ?? (vehicle.targetSalePrice != null ? Number(vehicle.targetSalePrice) : null);
+    const c = await company();
+    const qrPng = vehicle.as24Url
+      ? await QRCode.toBuffer(vehicle.as24Url, { width: 512, margin: 1 })
+      : null;
+
+    const W = 1191; // A3 quer
+    const H = 842;
+    const M = 70;
+    const priceText = displayPrice != null ? formatChf(displayPrice) : "Preis auf Anfrage";
+    const facts = [
+      vehicle.firstRegistration ? `EZ ${new Intl.DateTimeFormat("de-CH", { month: "2-digit", year: "numeric" }).format(vehicle.firstRegistration)}` : null,
+      vehicle.mileageKm != null ? `${vehicle.mileageKm.toLocaleString("de-CH")} km` : null,
+      vehicle.fuel,
+      vehicle.transmission,
+      vehicle.color,
+      vehicle.mfkUntil ? `MFK bis ${formatDateDe(vehicle.mfkUntil)}` : null,
+    ].filter(Boolean) as string[];
+
+    const buffer = await renderPdf(
+      (doc) => {
+        // Kopf: Firmenname als Logo-Platzhalter (echtes Logo kommt mit Phase G/E).
+        doc.font("Helvetica-Bold").fontSize(20).fillColor("#111827").text(c.companyName, M, M);
+        doc
+          .font("Helvetica")
+          .fontSize(10)
+          .fillColor("#6b7280")
+          .text([c.addressLine, [c.zip, c.city].filter(Boolean).join(" "), c.phone, c.website].filter(Boolean).join("  ·  "), M, M + 26);
+
+        // Preisbox rechts oben (Markenzeichen der Tafel).
+        doc.roundedRect(W - M - 310, M - 10, 310, 64, 10).fill("#f59e0b");
+        doc.font("Helvetica-Bold").fontSize(24).fillColor("#111827").text(priceText, W - M - 290, M + 8);
+
+        // Fahrzeugtitel gross.
+        doc.font("Helvetica-Bold").fontSize(32).fillColor("#111827").text(vehicleTitle(vehicle), M, M + 100, { width: W - 2 * M - 340 });
+
+        // Faktenzeile.
+        doc.font("Helvetica").fontSize(14).fillColor("#374151").text(facts.join("   ·   "), M, M + 158);
+
+        // Beschreibung (gekürzt auf den Tafel-Platz).
+        if (vehicle.description) {
+          doc.font("Helvetica").fontSize(12).fillColor("#374151").text(vehicle.description, M, M + 200, {
+            width: W - 2 * M - 380,
+            height: 210,
+            ellipsis: true,
+            lineGap: 3,
+          });
+        }
+
+        // Sonderausstattungen, zwei Spalten, fette Überschrift.
+        const equip = vehicle.equipment ?? [];
+        if (equip.length) {
+          const startY = M + 430;
+          doc.font("Helvetica-Bold").fontSize(13).fillColor("#111827").text("Ausstattung", M, startY);
+          doc.font("Helvetica").fontSize(12).fillColor("#374151");
+          equip.slice(0, 20).forEach((item, index) => {
+            const col = index % 2;
+            const row = Math.floor(index / 2);
+            // WinAnsi kennt kein ✓ — sauberer Bullet für Standard-Fonts.
+            doc.text(`•  ${item}`, M + col * 380, startY + 24 + row * 20);
+          });
+        }
+
+        // QR-Code unten rechts: direkt zum AutoScout24-Inserat.
+        if (qrPng) {
+          doc.image(qrPng, W - M - 150, H - M - 190, { width: 150 });
+          doc.font("Helvetica").fontSize(10).fillColor("#6b7280").text(
+            "Alle Infos & Fotos:\nQR-Code scannen",
+            W - M - 175,
+            H - M - 32,
+            { width: 200, align: "center" },
+          );
+        }
+
+        doc.font("Helvetica").fontSize(9).fillColor("#9ca3af").text(
+          `${c.companyName} · ${[c.zip, c.city].filter(Boolean).join(" ")}${c.phone ? ` · ${c.phone}` : ""}`,
+          M,
+          H - M - 14,
+        );
+      },
+      { size: "A3", layout: "landscape" },
+    );
+
+    const document = await saveDocument(vehicle.id, "TAFAEL", `A3-Tafel ${vehicleTitle(vehicle)}`, buffer);
+    await audit(req.user!.id, "GENERATE", "GeneratedDocument", document.id, { type: "TAFAEL", vehicleId: id });
     return reply.code(201).send(document);
   });
 

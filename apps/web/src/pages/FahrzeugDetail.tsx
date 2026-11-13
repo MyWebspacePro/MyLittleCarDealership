@@ -2,13 +2,39 @@ import { useEffect, useMemo, useState } from "react";
 import type { FormEvent } from "react";
 import { Link, useParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, ArrowLeftSquare, ArrowRightSquare, Download, ExternalLink, FileText, Info, Pencil, Plus, Save, Trash2, Upload } from "lucide-react";
+import {
+  ArrowLeft,
+  ArrowLeftSquare,
+  ArrowRightSquare,
+  Check,
+  ClipboardCopy,
+  Download,
+  ExternalLink,
+  FileText,
+  Info,
+  Link2,
+  Mail,
+  MessageCircle,
+  Pencil,
+  Plus,
+  QrCode,
+  Save,
+  Trash2,
+  Upload,
+} from "lucide-react";
 import { api, apiDownload } from "../lib/api";
 import {
   chf,
   formatDate,
+  formatDateTime,
+  whatsappLink,
+  APPOINTMENT_STATUS_LABELS,
+  APPOINTMENT_STATUS_STYLES,
+  APPOINTMENT_TYPES,
+  APPOINTMENT_TYPE_LABELS,
   DOCUMENT_KINDS,
   DOCUMENT_KIND_LABELS,
+  EQUIPMENT_CATALOG,
   GENERATED_DOC_LABELS,
   PROVIDER_TYPES,
   PROVIDER_TYPE_LABELS,
@@ -27,9 +53,12 @@ import {
   WORK_ORDER_STATUS_STYLES,
   WORK_ORDER_TYPES,
   WORK_ORDER_TYPE_LABELS,
+  type Appointment,
+  type AppointmentType,
   type ContactListItem,
   type DocumentKind,
   type GeneratedDocumentInfo,
+  type Inquiry,
   type Provider,
   type ProviderType,
   type PurchaseDeal,
@@ -124,20 +153,6 @@ function toPurchaseForm(p: NonNullable<VehicleDetail["purchase"]>, sellerId: str
   };
 }
 
-function PhasePlaceholder({ title, phase, text }: { title: string; phase: string; text: string }) {
-  return (
-    <Card>
-      <CardHeader title={title} description={text} />
-      <div className="px-5 py-12 text-center">
-        <p className="text-sm font-semibold text-slate-700">Folgt in {phase}</p>
-        <p className="mt-1 max-w-md mx-auto text-xs text-slate-500">
-          Datenmodell und Tabellen sind bereits vorbereitet — diese Ansicht wird in der nächsten Ausbaustufe aktiv.
-        </p>
-      </div>
-    </Card>
-  );
-}
-
 type WorkOrderForm = {
   type: WorkOrderType;
   providerType: ProviderType;
@@ -215,6 +230,32 @@ export default function FahrzeugDetail() {
     providerType: "PARTNERWERKSTATT",
     phone: "",
   });
+  // Verkauf: Ausstattungs-Maske, AS24-Link, Tafel-Preis
+  const [equipment, setEquipment] = useState<string[]>([]);
+  const [equipmentSaved, setEquipmentSaved] = useState(false);
+  const [as24Input, setAs24Input] = useState("");
+  const [boardPrice, setBoardPrice] = useState("");
+  // Anfragen & Termine
+  const [inquiryModalOpen, setInquiryModalOpen] = useState(false);
+  const [inquiryEditing, setInquiryEditing] = useState<Inquiry | null>(null);
+  const [inquiryForm, setInquiryForm] = useState<{
+    channel: PurchaseChannel;
+    contactId: string;
+    contactName: string;
+    subject: string;
+    summary: string;
+    nextFollowUpAt: string;
+  }>({ channel: "TELEFON", contactId: "", contactName: "", subject: "", summary: "", nextFollowUpAt: "" });
+  const [appointmentModalOpen, setAppointmentModalOpen] = useState(false);
+  const [appointmentEditing, setAppointmentEditing] = useState<Appointment | null>(null);
+  const [appointmentForm, setAppointmentForm] = useState<{
+    type: AppointmentType;
+    title: string;
+    startsAt: string;
+    endsAt: string;
+    contactId: string;
+    notes: string;
+  }>({ type: "BESICHTIGUNG", title: "", startsAt: "", endsAt: "", contactId: "", notes: "" });
 
   const { data: vehicle, isLoading } = useQuery({
     queryKey: ["vehicle", id],
@@ -251,6 +292,13 @@ export default function FahrzeugDetail() {
       setPurchaseLoadedId("none");
     }
   }, [vehicle, purchaseLoadedId]);
+
+  // Verkauf: Ausstattung und AS24-Link an die geladenen Fahrzeugdaten koppeln.
+  useEffect(() => {
+    if (!vehicle) return;
+    setEquipment(vehicle.equipment ?? []);
+    setAs24Input(vehicle.as24Url ?? "");
+  }, [vehicle?.id]);
 
   function invalidate() {
     void queryClient.invalidateQueries({ queryKey: ["vehicle", id] });
@@ -416,6 +464,144 @@ export default function FahrzeugDetail() {
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["providers"] }),
     onError: (err: Error) => setPageError(err.message),
   });
+
+  const saveEquipmentMutation = useMutation({
+    mutationFn: () => api(`/vehicles/${id}`, { method: "PUT", body: JSON.stringify({ equipment }) }),
+    onSuccess: () => {
+      setEquipmentSaved(true);
+      window.setTimeout(() => setEquipmentSaved(false), 2500);
+      invalidate();
+    },
+    onError: (err: Error) => setPageError(err.message),
+  });
+
+  const saveAs24Mutation = useMutation({
+    mutationFn: () => api(`/vehicles/${id}`, { method: "PUT", body: JSON.stringify({ as24Url: as24Input }) }),
+    onSuccess: invalidate,
+    onError: (err: Error) => setPageError(err.message),
+  });
+
+  const boardPdfMutation = useMutation({
+    mutationFn: () =>
+      api<GeneratedDocumentInfo>(`/vehicles/${id}/board-pdf`, {
+        method: "POST",
+        body: JSON.stringify({ price: boardPrice || null }),
+      }),
+    onSuccess: (doc) => apiDownload(`/documents/${doc.id}`, `${doc.title}.pdf`),
+    onError: (err: Error) => setPageError(err.message),
+  });
+
+  function submitInquiry(event: FormEvent) {
+    event.preventDefault();
+    setPageError(null);
+    const body = {
+      channel: inquiryForm.channel,
+      contactId: inquiryForm.contactId || null,
+      contactName: inquiryForm.contactId ? null : inquiryForm.contactName || null,
+      subject: inquiryForm.subject || null,
+      summary: inquiryForm.summary || null,
+      nextFollowUpAt: inquiryForm.nextFollowUpAt || null,
+    };
+    if (inquiryEditing) {
+      updateInquiryMutation.mutate({ id: inquiryEditing.id, body });
+    } else {
+      createInquiryMutation.mutate(body);
+    }
+  }
+
+  const createInquiryMutation = useMutation({
+    mutationFn: (body: Record<string, unknown>) => api(`/vehicles/${id}/inquiries`, { method: "POST", body: JSON.stringify(body) }),
+    onSuccess: () => {
+      setInquiryModalOpen(false);
+      setInquiryEditing(null);
+      invalidate();
+    },
+    onError: (err: Error) => setPageError(err.message),
+  });
+
+  const updateInquiryMutation = useMutation({
+    mutationFn: (payload: { id: string; body: Record<string, unknown> }) =>
+      api(`/inquiries/${payload.id}`, { method: "PUT", body: JSON.stringify(payload.body) }),
+    onSuccess: () => {
+      setInquiryModalOpen(false);
+      setInquiryEditing(null);
+      invalidate();
+    },
+    onError: (err: Error) => setPageError(err.message),
+  });
+
+  const deleteInquiryMutation = useMutation({
+    mutationFn: (inquiryId: string) => api(`/inquiries/${inquiryId}`, { method: "DELETE" }),
+    onSuccess: invalidate,
+    onError: (err: Error) => setPageError(err.message),
+  });
+
+  function submitAppointment(event: FormEvent) {
+    event.preventDefault();
+    setPageError(null);
+    const body = {
+      vehicleId: id,
+      type: appointmentForm.type,
+      title: appointmentForm.title,
+      startsAt: appointmentForm.startsAt,
+      endsAt: appointmentForm.endsAt || null,
+      contactId: appointmentForm.contactId || null,
+      notes: appointmentForm.notes || null,
+    };
+    if (appointmentEditing) {
+      updateAppointmentMutation.mutate({ id: appointmentEditing.id, body });
+    } else {
+      createAppointmentMutation.mutate(body);
+    }
+  }
+
+  const createAppointmentMutation = useMutation({
+    mutationFn: (body: Record<string, unknown>) => api(`/appointments`, { method: "POST", body: JSON.stringify(body) }),
+    onSuccess: () => {
+      setAppointmentModalOpen(false);
+      setAppointmentEditing(null);
+      invalidate();
+    },
+    onError: (err: Error) => setPageError(err.message),
+  });
+
+  const updateAppointmentMutation = useMutation({
+    mutationFn: (payload: { id: string; body: Record<string, unknown> }) =>
+      api(`/appointments/${payload.id}`, { method: "PUT", body: JSON.stringify(payload.body) }),
+    onSuccess: () => {
+      setAppointmentModalOpen(false);
+      setAppointmentEditing(null);
+      invalidate();
+    },
+    onError: (err: Error) => setPageError(err.message),
+  });
+
+  const deleteAppointmentMutation = useMutation({
+    mutationFn: (appointmentId: string) => api(`/appointments/${appointmentId}`, { method: "DELETE" }),
+    onSuccess: invalidate,
+    onError: (err: Error) => setPageError(err.message),
+  });
+
+  const [listingCopied, setListingCopied] = useState(false);
+
+  function copyListing() {
+    if (!vehicle) return;
+    const lines = [
+      `${vehicle.make} ${vehicle.model}${vehicle.variant ? ` ${vehicle.variant}` : ""}`,
+      `Erste Inverkehrtsetzung: ${formatDate(vehicle.firstRegistration)} · ${vehicle.mileageKm?.toLocaleString("de-CH") ?? "?"} km`,
+      [vehicle.fuel, vehicle.transmission, vehicle.color].filter(Boolean).join(" · "),
+      vehicle.hasServiceBook ? "Scheckheft gepflegt" : "",
+      "",
+      vehicle.description ?? "",
+      "",
+      vehicle.equipment.length ? `Ausstattung:\n${vehicle.equipment.map((e) => `• ${e}`).join("\n")}` : "",
+      "",
+      `Preis: ${chf(vehicle.targetSalePrice)}`,
+    ];
+    void navigator.clipboard.writeText(lines.filter(Boolean).join("\n"));
+    setListingCopied(true);
+    window.setTimeout(() => setListingCopied(false), 2000);
+  }
 
   // Live-Kalkulation (Spiegel der Server-Logik).
   const calc = useMemo(() => {
@@ -1196,25 +1382,322 @@ export default function FahrzeugDetail() {
         </div>
       ) : null}
       {tab === "verkauf" ? (
-        <PhasePlaceholder
-          title="Verkauf"
-          phase="Phase D"
-          text="Exposé, AutoScout24-Vorbereitung, A3-Tafel mit QR-Code und das Kaufverfahren."
-        />
+        <div className="space-y-6">
+          <Card>
+            <CardHeader
+              title="AutoScout24-Vorbereitung"
+              description="Daten, Beschreibung und Ausstattung kopierfertig fürs Händlerportal — das Einstellen bleibt manuell."
+              actions={
+                <Button size="sm" variant="secondary" onClick={copyListing}>
+                  <ClipboardCopy size={14} /> {listingCopied ? "Kopiert!" : "Inserat-Text kopieren"}
+                </Button>
+              }
+            />
+            <div className="space-y-4 px-5 py-4">
+              <dl className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm sm:grid-cols-4">
+                {[
+                  ["Titel", `${vehicle.make} ${vehicle.model}${vehicle.variant ? ` ${vehicle.variant}` : ""}`],
+                  ["Erste Inverkehrtsetzung", formatDate(vehicle.firstRegistration)],
+                  ["Kilometer", vehicle.mileageKm?.toLocaleString("de-CH") ?? "–"],
+                  ["Treibstoff / Getriebe", [vehicle.fuel, vehicle.transmission].filter(Boolean).join(" / ") || "–"],
+                  ["Farbe", vehicle.color ?? "–"],
+                  ["MFK bis", formatDate(vehicle.mfkUntil)],
+                  ["Scheckheft", vehicle.hasServiceBook ? "Ja" : "Nein"],
+                  ["Preis", chf(vehicle.targetSalePrice)],
+                ].map(([label, value]) => (
+                  <div key={label}>
+                    <dt className="text-xs font-semibold uppercase tracking-wide text-slate-500">{label}</dt>
+                    <dd className="text-slate-800">{value}</dd>
+                  </div>
+                ))}
+              </dl>
+              {vehicle.description ? (
+                <div className="rounded-xl bg-slate-50 px-4 py-3">
+                  <p className="whitespace-pre-line text-sm text-slate-700">{vehicle.description}</p>
+                </div>
+              ) : (
+                <Alert kind="info">Noch keine Beschreibung — erst im Tab «Übersicht» → Fahrzeugdaten bearbeiten erfassen.</Alert>
+              )}
+
+              {/* Ausstattungs-Maske */}
+              <div>
+                <div className="mb-2 flex items-center justify-between">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Sonderausstattungen (für Tafel & Exposé)</p>
+                  <Button size="sm" variant="secondary" onClick={() => saveEquipmentMutation.mutate()} disabled={saveEquipmentMutation.isPending}>
+                    <Save size={13} /> {equipmentSaved ? "Gespeichert" : "Ausstattung speichern"}
+                  </Button>
+                </div>
+                <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 sm:grid-cols-3 lg:grid-cols-4">
+                  {EQUIPMENT_CATALOG.map((item) => (
+                    <label key={item} className="flex items-center gap-2 text-xs text-slate-700">
+                      <input
+                        type="checkbox"
+                        checked={equipment.includes(item)}
+                        onChange={(e) =>
+                          setEquipment(e.target.checked ? [...equipment, item] : equipment.filter((x) => x !== item))
+                        }
+                        className="h-3.5 w-3.5 rounded border-slate-300"
+                      />
+                      {item}
+                    </label>
+                  ))}
+                </div>
+                {equipment.length ? (
+                  <p className="mt-2 text-[11px] text-slate-500">Gewählt: {equipment.length} — erscheinen auf der A3-Tafel und im Inserat-Text.</p>
+                ) : null}
+              </div>
+
+              {/* Link-Verwaltung */}
+              <div className="rounded-xl border border-slate-200 p-4">
+                <p className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  <Link2 size={13} /> Inserat-Link
+                </p>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Input
+                    value={as24Input}
+                    onChange={(e) => setAs24Input(e.target.value)}
+                    placeholder="https://www.autoscout24.ch/de/d/…"
+                    className="w-full sm:max-w-md"
+                  />
+                  <Button size="sm" variant="secondary" onClick={() => saveAs24Mutation.mutate()} disabled={saveAs24Mutation.isPending}>
+                    Link speichern
+                  </Button>
+                  {vehicle.as24Url ? (
+                    <a
+                      href={vehicle.as24Url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex items-center gap-1 text-sm text-blue-600 hover:underline"
+                    >
+                      Inserat öffnen <ExternalLink size={13} />
+                    </a>
+                  ) : null}
+                </div>
+                <p className="mt-1.5 text-[11px] text-slate-500">
+                  Der Link speist den QR-Code auf der A3-Tafel. Händlerportal:{" "}
+                  {settings?.as24PortalUrl ? (
+                    <a href={settings.as24PortalUrl} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline">
+                      AutoScout24 Manager öffnen <ExternalLink size={11} className="inline" />
+                    </a>
+                  ) : (
+                    <span>URL in den Einstellungen hinterlegen</span>
+                  )}
+                </p>
+              </div>
+            </div>
+          </Card>
+
+          <Card>
+            <CardHeader
+              title="A3-Tafel für die Windschutzscheibe"
+              description="Immer gleiches Schema: Firma, Preis, Fahrzeugdaten, Beschreibung, Ausstattung und QR-Code zum Inserat."
+              actions={
+                <Button size="sm" onClick={() => boardPdfMutation.mutate()} disabled={boardPdfMutation.isPending}>
+                  <QrCode size={14} /> {boardPdfMutation.isPending ? "Erstellt …" : "Tafel als PDF"}
+                </Button>
+              }
+            />
+            <div className="flex flex-wrap items-end gap-3 px-5 py-4">
+              <Field label="Preis auf der Tafel" hint="Leer = Zielverkaufspreis">
+                <Input type="number" min={0} step={100} value={boardPrice} onChange={(e) => setBoardPrice(e.target.value)} className="w-44" />
+              </Field>
+              <p className="max-w-md pb-1 text-xs text-slate-500">
+                {vehicle.as24Url
+                  ? "QR-Code wird auf den Inserat-Link gerichtet."
+                  : "Ohne Inserat-Link erscheint keine QR-Code-Ecke — Link oben speichern, dann Tafel erzeugen."}
+                {" A3 quer, druckfertig."}
+              </p>
+            </div>
+          </Card>
+
+          <Alert kind="info">
+            Der Verkaufsvorgang selbst (Kaufvertrag, Rechnung mit QR-Code, Leasing, Zahlungen, Zusammenfassungs-PDF) folgt in
+            Phase E. Anfragen und Termine werden in den eigenen Tabs protokolliert.
+          </Alert>
+        </div>
       ) : null}
       {tab === "anfragen" ? (
-        <PhasePlaceholder
-          title="Anfragen & Kommunikation"
-          phase="Phase D"
-          text="Telefon, WhatsApp, E-Mail und AutoScout24-Anfragen protokolliert pro Fahrzeug."
-        />
+        <Card>
+          <CardHeader
+            title="Anfragen & Kommunikation"
+            description="Telefon, WhatsApp, E-Mail, AutoScout24 — mit wem hast du was ausgemacht?"
+            actions={
+              <Button
+                size="sm"
+                onClick={() => {
+                  setInquiryForm({ channel: "TELEFON", contactId: "", contactName: "", subject: "", summary: "", nextFollowUpAt: "" });
+                  setInquiryEditing(null);
+                  setInquiryModalOpen(true);
+                }}
+              >
+                <Plus size={14} /> Anfrage protokollieren
+              </Button>
+            }
+          />
+          <div className="divide-y divide-slate-100">
+            {vehicle.inquiries.length === 0 ? (
+              <p className="px-5 py-8 text-center text-sm text-slate-500">Noch keine Anfragen protokolliert.</p>
+            ) : (
+              vehicle.inquiries.map((inquiry) => {
+                const phone = inquiry.contact?.mobile ?? inquiry.contact?.phone ?? null;
+                const email = inquiry.contact?.email ?? null;
+                const followUpOverdue = inquiry.nextFollowUpAt && !inquiry.resolvedAt && new Date(inquiry.nextFollowUpAt) < new Date();
+                return (
+                  <div key={inquiry.id} className="px-5 py-3.5">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Badge className="bg-slate-100 text-slate-600 ring-slate-200">{PURCHASE_CHANNEL_LABELS[inquiry.channel]}</Badge>
+                      <span className="text-sm font-semibold text-slate-800">
+                        {inquiry.contact?.displayName ?? inquiry.contactName ?? "Unbekannt"}
+                      </span>
+                      {inquiry.resolvedAt ? (
+                        <Badge className="bg-emerald-50 text-emerald-700 ring-emerald-200">Erledigt</Badge>
+                      ) : inquiry.nextFollowUpAt ? (
+                        <Badge className={followUpOverdue ? "bg-rose-50 text-rose-700 ring-rose-200" : "bg-amber-50 text-amber-700 ring-amber-200"}>
+                          Wiedervorlage {formatDate(inquiry.nextFollowUpAt)}
+                        </Badge>
+                      ) : null}
+                      <span className="text-[11px] text-slate-400">{formatDateTime(inquiry.createdAt)}</span>
+                    </div>
+                    {inquiry.subject ? <p className="mt-1 text-sm font-medium text-slate-700">{inquiry.subject}</p> : null}
+                    {inquiry.summary ? <p className="mt-0.5 whitespace-pre-line text-sm text-slate-600">{inquiry.summary}</p> : null}
+                    <div className="mt-1.5 flex flex-wrap gap-1.5">
+                      {phone ? (
+                        <>
+                          <a
+                            href={whatsappLink(phone)}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-2 py-1 text-xs font-medium text-slate-600 hover:bg-emerald-50 hover:text-emerald-700"
+                          >
+                            <MessageCircle size={12} /> WhatsApp
+                          </a>
+                          <a
+                            href={`tel:${phone}`}
+                            className="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-2 py-1 text-xs font-medium text-slate-600 hover:bg-slate-50"
+                          >
+                            Anrufen
+                          </a>
+                        </>
+                      ) : null}
+                      {email ? (
+                        <a
+                          href={`mailto:${email}`}
+                          className="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-2 py-1 text-xs font-medium text-slate-600 hover:bg-slate-50"
+                        >
+                          <Mail size={12} /> E-Mail
+                        </a>
+                      ) : null}
+                      {!inquiry.resolvedAt ? (
+                        <button
+                          type="button"
+                          onClick={() => updateInquiryMutation.mutate({ id: inquiry.id, body: { resolvedAt: new Date().toISOString() } })}
+                          className="inline-flex items-center gap-1 rounded-lg border border-emerald-200 px-2 py-1 text-xs font-medium text-emerald-700 hover:bg-emerald-50"
+                        >
+                          <Check size={12} /> Erledigt
+                        </button>
+                      ) : null}
+                      <button
+                        type="button"
+                        title="Bearbeiten"
+                        onClick={() => {
+                          setInquiryEditing(inquiry);
+                          setInquiryForm({
+                            channel: inquiry.channel,
+                            contactId: inquiry.contactId ?? "",
+                            contactName: inquiry.contactName ?? "",
+                            subject: inquiry.subject ?? "",
+                            summary: inquiry.summary ?? "",
+                            nextFollowUpAt: inquiry.nextFollowUpAt ? inquiry.nextFollowUpAt.slice(0, 10) : "",
+                          });
+                          setInquiryModalOpen(true);
+                        }}
+                        className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+                      >
+                        <Pencil size={13} />
+                      </button>
+                      <button
+                        type="button"
+                        title="Löschen"
+                        onClick={() => deleteInquiryMutation.mutate(inquiry.id)}
+                        className="rounded-lg p-1.5 text-slate-400 hover:bg-rose-50 hover:text-rose-600"
+                      >
+                        <Trash2 size={13} />
+                      </button>
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </Card>
       ) : null}
+
       {tab === "termine" ? (
-        <PhasePlaceholder
-          title="Termine"
-          phase="Phase D"
-          text="Besichtigungen, Probefahrten und Rückrufe im Kalender."
-        />
+        <Card>
+          <CardHeader
+            title="Termine zu diesem Fahrzeug"
+            description="Besichtigungen, Probefahrten und Rückrufe — alle Termine auch im Kalender."
+            actions={
+              <Button
+                size="sm"
+                onClick={() => {
+                  setAppointmentForm({ type: "BESICHTIGUNG", title: "", startsAt: "", endsAt: "", contactId: "", notes: "" });
+                  setAppointmentEditing(null);
+                  setAppointmentModalOpen(true);
+                }}
+              >
+                <Plus size={14} /> Termin anlegen
+              </Button>
+            }
+          />
+          <div className="divide-y divide-slate-100">
+            {vehicle.appointments.length === 0 ? (
+              <p className="px-5 py-8 text-center text-sm text-slate-500">Noch keine Termine.</p>
+            ) : (
+              vehicle.appointments.map((appointment) => (
+                <div key={appointment.id} className="flex flex-wrap items-center justify-between gap-3 px-5 py-3">
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Badge className="bg-slate-100 text-slate-700 ring-slate-200">{APPOINTMENT_TYPE_LABELS[appointment.type]}</Badge>
+                      <Badge className={APPOINTMENT_STATUS_STYLES[appointment.status]}>{APPOINTMENT_STATUS_LABELS[appointment.status]}</Badge>
+                      <span className="text-sm text-slate-800">{formatDateTime(appointment.startsAt)}</span>
+                    </div>
+                    <p className="mt-0.5 font-medium text-slate-900">{appointment.title}</p>
+                    {appointment.notes ? <p className="text-xs text-slate-500">{appointment.notes}</p> : null}
+                  </div>
+                  <div className="flex gap-1.5">
+                    {appointment.status === "GEPLANT" ? (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => updateAppointmentMutation.mutate({ id: appointment.id, body: { status: "ERLEDIGT" } })}
+                          className="inline-flex items-center gap-1 rounded-lg border border-emerald-200 px-2 py-1 text-xs font-medium text-emerald-700 hover:bg-emerald-50"
+                        >
+                          <Check size={12} /> Erledigt
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => updateAppointmentMutation.mutate({ id: appointment.id, body: { status: "ABGESAGT" } })}
+                          className="rounded-lg border border-slate-200 px-2 py-1 text-xs font-medium text-slate-500 hover:bg-slate-50"
+                        >
+                          Absagen
+                        </button>
+                      </>
+                    ) : null}
+                    <button
+                      type="button"
+                      title="Löschen"
+                      onClick={() => deleteAppointmentMutation.mutate(appointment.id)}
+                      className="rounded-lg p-1.5 text-slate-400 hover:bg-rose-50 hover:text-rose-600"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </Card>
       ) : null}
 
       {/* Fahrzeugdaten bearbeiten */}
@@ -1500,6 +1983,124 @@ export default function FahrzeugDetail() {
             </Button>
             <Button type="submit" disabled={createProviderMutation.isPending}>
               {createProviderMutation.isPending ? "Speichern …" : "Speichern"}
+            </Button>
+          </div>
+        </form>
+      </Modal>
+      {/* Anfrage protokollieren */}
+      <Modal
+        open={inquiryModalOpen}
+        title={inquiryEditing ? "Anfrage bearbeiten" : "Anfrage protokollieren"}
+        description="Kanal, Kontakt und Vereinbarung — Klick-Links erscheinen bei hinterlegten Kontaktdaten."
+        onClose={() => setInquiryModalOpen(false)}
+      >
+        <form onSubmit={submitInquiry} className="space-y-4">
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Kanal">
+              <Select value={inquiryForm.channel} onChange={(e) => setInquiryForm({ ...inquiryForm, channel: e.target.value as PurchaseChannel })}>
+                {PURCHASE_CHANNELS.map((c) => (
+                  <option key={c} value={c}>
+                    {PURCHASE_CHANNEL_LABELS[c]}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+            <Field label="Kontakt (bestehend)">
+              <Select value={inquiryForm.contactId} onChange={(e) => setInquiryForm({ ...inquiryForm, contactId: e.target.value })}>
+                <option value="">– Freitext unten –</option>
+                {(contacts ?? []).map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.displayName}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+          </div>
+          {!inquiryForm.contactId ? (
+            <Field label="Wer meldet sich?" hint="Freitext, wenn noch kein Kontakt angelegt wurde">
+              <Input value={inquiryForm.contactName} onChange={(e) => setInquiryForm({ ...inquiryForm, contactName: e.target.value })} />
+            </Field>
+          ) : null}
+          <Field label="Betreff">
+            <Input value={inquiryForm.subject} onChange={(e) => setInquiryForm({ ...inquiryForm, subject: e.target.value })} placeholder="z. B. WhatsApp: Probefahrt-Anfrage" />
+          </Field>
+          <Field label="Verlauf / Vereinbarung">
+            <textarea
+              rows={4}
+              value={inquiryForm.summary}
+              onChange={(e) => setInquiryForm({ ...inquiryForm, summary: e.target.value })}
+              placeholder="Was wurde ausgemacht?"
+              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-slate-500 focus:outline-none focus:ring-2 focus:ring-slate-900/10"
+            />
+          </Field>
+          <Field label="Wiedervorlage">
+            <Input type="date" value={inquiryForm.nextFollowUpAt} onChange={(e) => setInquiryForm({ ...inquiryForm, nextFollowUpAt: e.target.value })} />
+          </Field>
+          <div className="flex justify-end gap-2 pt-2">
+            <Button type="button" variant="secondary" onClick={() => setInquiryModalOpen(false)}>
+              Abbrechen
+            </Button>
+            <Button type="submit" disabled={createInquiryMutation.isPending || updateInquiryMutation.isPending}>
+              {createInquiryMutation.isPending || updateInquiryMutation.isPending ? "Speichern …" : "Speichern"}
+            </Button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* Termin anlegen / bearbeiten */}
+      <Modal
+        open={appointmentModalOpen}
+        title={appointmentEditing ? "Termin bearbeiten" : "Termin anlegen"}
+        description="Besichtigungen und Probefahrten landen automatisch im Kalender."
+        onClose={() => setAppointmentModalOpen(false)}
+      >
+        <form onSubmit={submitAppointment} className="space-y-4">
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Art">
+              <Select value={appointmentForm.type} onChange={(e) => setAppointmentForm({ ...appointmentForm, type: e.target.value as AppointmentType })}>
+                {APPOINTMENT_TYPES.map((t) => (
+                  <option key={t} value={t}>
+                    {APPOINTMENT_TYPE_LABELS[t]}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+            <Field label="Titel *">
+              <Input value={appointmentForm.title} onChange={(e) => setAppointmentForm({ ...appointmentForm, title: e.target.value })} required />
+            </Field>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Beginn *">
+              <Input type="datetime-local" value={appointmentForm.startsAt} onChange={(e) => setAppointmentForm({ ...appointmentForm, startsAt: e.target.value })} required />
+            </Field>
+            <Field label="Ende">
+              <Input type="datetime-local" value={appointmentForm.endsAt} onChange={(e) => setAppointmentForm({ ...appointmentForm, endsAt: e.target.value })} />
+            </Field>
+          </div>
+          <Field label="Kontakt">
+            <Select value={appointmentForm.contactId} onChange={(e) => setAppointmentForm({ ...appointmentForm, contactId: e.target.value })}>
+              <option value="">– ohne –</option>
+              {(contacts ?? []).map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.displayName}
+                </option>
+              ))}
+            </Select>
+          </Field>
+          <Field label="Notizen">
+            <textarea
+              rows={2}
+              value={appointmentForm.notes}
+              onChange={(e) => setAppointmentForm({ ...appointmentForm, notes: e.target.value })}
+              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-slate-500 focus:outline-none focus:ring-2 focus:ring-slate-900/10"
+            />
+          </Field>
+          <div className="flex justify-end gap-2 pt-2">
+            <Button type="button" variant="secondary" onClick={() => setAppointmentModalOpen(false)}>
+              Abbrechen
+            </Button>
+            <Button type="submit" disabled={createAppointmentMutation.isPending || updateAppointmentMutation.isPending}>
+              {createAppointmentMutation.isPending || updateAppointmentMutation.isPending ? "Speichern …" : "Speichern"}
             </Button>
           </div>
         </form>

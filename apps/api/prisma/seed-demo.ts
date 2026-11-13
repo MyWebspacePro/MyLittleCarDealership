@@ -104,6 +104,18 @@ async function ensureWorkOrder(vehicleId: string, description: string, data: Rec
   return prisma.workOrder.create({ data: { vehicleId, description, ...data } });
 }
 
+async function ensureInquiry(vehicleId: string, key: { subject: string }, data: Record<string, unknown>) {
+  const existing = await prisma.inquiry.findFirst({ where: { vehicleId, subject: key.subject } });
+  if (existing) return existing;
+  return prisma.inquiry.create({ data: { vehicleId, ...data } });
+}
+
+async function ensureAppointment(vehicleId: string, key: { title: string }, data: Record<string, unknown>) {
+  const existing = await prisma.appointment.findFirst({ where: { vehicleId, title: key.title } });
+  if (existing) return prisma.appointment.update({ where: { id: existing.id }, data });
+  return prisma.appointment.create({ data: { vehicleId, ...data } });
+}
+
 async function main() {
   const max = await ensureContact({
     email: "max.muster@example.ch",
@@ -155,6 +167,16 @@ async function main() {
     hasServiceBook: true,
     targetSalePrice: 22900,
     status: "VERKAUF",
+    equipment: [
+      "Matrix-LED Scheinwerfer",
+      "Adaptive Cruise Control (ACC)",
+      "Rückfahrkamera",
+      "Navi & App-Connect",
+      "Sitzheizung vorn",
+      "Park Distance Control",
+      "Tempomat",
+      "Multifunktionslenkrad",
+    ],
     description:
       "Scheckheftgepflegter Golf 8 mit Matrix-LED, ACC und Kamera. Ein Besitzer, Garagenwagen, Nichtraucherfahrzeug. Neupreis 36'900 CHF.",
     as24Url: "https://www.autoscout24.ch/de/d/vw-golf-etsi-demo-1234567",
@@ -178,6 +200,34 @@ async function main() {
       { kind: "SERVICE", description: "Wartung inkl. Bremsen vorne", amount: 450 },
     ],
   );
+  await ensureInquiry(golf.id, { subject: "Telefonat: Zustand & Servicehistorie" }, {
+    channel: "TELEFON",
+    contactName: "Herr Hofer",
+    subject: "Telefonat: Zustand & Servicehistorie",
+    summary: "Interessent aus Schaffhausen. Servicehistorie und Zustand geklärt, Preis diskutiert — kommt zur Besichtigung vorbei.",
+    resolvedAt: new Date(),
+  });
+  await ensureInquiry(golf.id, { subject: "WhatsApp: Probefahrt-Anfrage" }, {
+    channel: "WHATSAPP",
+    contactName: "Herr Hofer",
+    subject: "WhatsApp: Probefahrt-Anfrage",
+    summary: "Möchte am Samstag eine Probefahrt machen. Versprochene Fotos des Innenraums geschickt.",
+    nextFollowUpAt: new Date(Date.now() + 86_400_000),
+  });
+  // Demo-Termine: morgen 14:00 bzw. übermorgen 10:00 (stabil für Kalender-Demo).
+  const probeStart = new Date();
+  probeStart.setDate(probeStart.getDate() + 1);
+  probeStart.setHours(14, 0, 0, 0);
+  const probeEnd = new Date(probeStart);
+  probeEnd.setMinutes(probeEnd.getMinutes() + 45);
+  await ensureAppointment(golf.id, { title: "Probefahrt Golf (Familie Hofer)" }, {
+    type: "PROBEFAHRT",
+    title: "Probefahrt Golf (Familie Hofer)",
+    startsAt: probeStart,
+    endsAt: probeEnd,
+    status: "GEPLANT",
+    notes: "Fahrzeug vorbereiten, zweiter Schlüssel bereitlegen. Führerschein kopieren.",
+  });
 
   // Anbieter-Stammdaten (Werkstätten, Aufbereiter, externe Spezialisten).
   const markenWerkstatt = await ensureProvider("BMW Vertretung Schaffhausen", {
@@ -205,6 +255,15 @@ async function main() {
     hasServiceBook: true,
     targetSalePrice: 27900,
     status: "AUFBEREITUNG",
+    equipment: [
+      "Anhängerkupplung",
+      "Panorama-Glasdach",
+      "Head-Up Display",
+      "LED-Scheinwerfer",
+      "Elektrische Heckklappe",
+      "Allrad (xDrive)",
+      "Lederlenkrad",
+    ],
     description:
       "Langer Servicehistorie-Blick: alle Services bei der Vertretung. Anhängerkupplung, Panorama, Head-Up.",
   });
@@ -253,6 +312,16 @@ async function main() {
     status: "GEPLANT",
     costEstimate: 450,
     plannedFor: new Date(),
+  });
+  const visitStart = new Date();
+  visitStart.setDate(visitStart.getDate() + 2);
+  visitStart.setHours(10, 0, 0, 0);
+  await ensureAppointment(bmw.id, { title: "Besichtigung BMW 320d (Herr Pfister)" }, {
+    type: "BESICHTIGUNG",
+    title: "Besichtigung BMW 320d (Herr Pfister)",
+    startsAt: visitStart,
+    status: "GEPLANT",
+    notes: "Reparatur Frontscheibe sollte bis dahin fertig sein.",
   });
 
   const fiat = await ensureVehicle("ZFA3120000E123456", {

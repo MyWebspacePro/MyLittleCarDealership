@@ -1,6 +1,6 @@
 # Projekt-Status
 
-Stand: 13.11.2026 (Phase C der Schaltzentrale)
+Stand: 13.11.2026 (Phase D der Schaltzentrale)
 
 ## Live
 
@@ -57,12 +57,47 @@ Stand: 13.11.2026 (Phase C der Schaltzentrale)
   StrictMode) teilen sich einen /auth/refresh; davor konnte die Doppel-Refresh-Race
   die Session-Rotation als Diebstahl werten und alle Sessions sperren
 
-## Offen / als Nächstes (Phasen D–G)
+## Phase C — Aufbereitung (13.11.2026)
 
-- **B Ankauf** ✓ (13.11.2026): Leads, Übernehmen, Angebots-/Ankaufsvertrag-PDF, Eintausch
-- **C Aufbereitung** ✓ (13.11.2026): Aufträge mit Anbieter-Typen, Soll/Ist-Rückfluss, Automatik
-- **D Verkauf-Frontend**: Exposé + AS24-Vorbereitung (kopierfertig), A3-Tafel-PDF mit QR,
-  Anfragen-Protokoll mit Klick-Links, Termine/Kalender, Standtage im Dashboard
+- Aufträge (WorkOrders) je Fahrzeug: intern / Markenwerkstatt / Partnerwerkstatt /
+  extern / Aufbereiter — Typ, Anbieter (Stammdaten /providers), Soll-Kosten,
+  Ist-Kosten, geplant/completedAt, Notizen
+- Automatik: Beim Abschluss eines Ankaufsvorgangs werden die Kalkulationspositionen
+  automatisch als Aufträge angelegt (AUFBEREITUNG→Aufbereiter, REPARATUR→Partnerwerkstatt,
+  SERVICE→Markenwerkstatt, SONSTIGES→extern, Soll-Kosten = Betrag); der erste
+  Auftrag startet die Pipeline GEKAUFT → AUFBEREITUNG
+- Soll/Ist-Deckungsbeitrag: die Ist-Kosten der Aufträge fliessen live in die
+  Gewinnprognose im Ankauf-Tab zurück; Ankaufs-Tab zeigt beide Summen
+- Anbieter-Verwaltung (4 Typen, Demo: Vertretung, Partner-Werkstatt, Dellen-Doktor,
+  CarPolish); Detail-Tab «Aufträge» mit Inline-Statuswechsel und Modal
+
+## Phase D — Verkauf-Frontend (13.11.2026)
+
+- **AS24-Vorbereitung** im Verkauf-Tab: kopierfertige Datenliste (Marke/Modell, EZ,
+  km, Treibstoff, Getriebe, Farbe) + Inserat-Text aus Fahrzeugdaten/Beschreibung —
+  der Händler stellt manuell auf AutoScout24 ein (System bewusst ohne Portal-API)
+- **Sonderausstattungs-Maske**: Katalog mit ~30 üblichen Ausstattungsmerkmalen
+  (Matrix-LED, ACC, Rückfahrkamera, Isofix, AHK …), Auswahl wird am Fahrzeug
+  gespeichert und fliest in Inserat-Text und Tafel-PDF ein; AS24-Inserat-Link wird
+  am Fahrzeug verwaltet (Basis für QR-Code auf der Tafel)
+- **A3-Tafel-PDF** (quer): Preisbox oben rechts (optionaler Tafel-Preis abweichend
+  vom Zielpreis), Fahrzeug-Titel, Faktenzeile, Beschreibung, Ausstattung in zwei
+  Spalten, **QR-Code → AS24-Inserat** mit Beschriftung; passt garantiert auf eine
+  A3-Seite
+- **Anfragen-Protokoll** je Fahrzeug: Kanal (Telefon/WhatsApp/E-Mail/AS24/Besuch),
+  verknüpfter Kontakt oder Freitextname, Betreff, Verlauf, Wiedervorlage (überfällig
+  rot), erledigt; **Klick-Links** WhatsApp (wa.me mit CH-Rufnummern-Normalisierung),
+  Telefon (tel:), E-Mail (mailto:) — der Nutzer telefoniert/whatsappt selbst,
+  das System protokolliert
+- **Termine**: Besichtigungen/Probefahrten/Rückrufe je Fahrzeug (datetime, Status
+  geplant/fertig/abgesagt, Notizen) mit Aktions-Buttons; **Kalender-Seite** gruppiert
+  alle Termine ab heute nach Tagen (Heute/Morgen/Wochentag)
+- **Standtage**: statusChangedAt je Fahrzeug; Dashboard-Bestand-Karte zeigt den
+  längsten Bestandsalten mit Ampel (>30 Tage amber, >60 rot)
+- Demo-Seed erweitert: Golf mit 8 Ausstattungsmerkmalen + AS24-Link, 2 Anfragen,
+  Probefahrt/Besichtigung mit kalenderstabilen Terminen (morgen 14:00 / übermorgen 10:00)
+
+## Offen / als Nächstes (Phasen E–G)
 - **E Abschluss**: Kaufvertrag-PDF (OR-Klauseln), Schweizer QR-Rechnung (`swissqrbill`,
   QR-IBAN + 27-stellige QRR), Leasing-Variante, Zusatzleistungen, Zahlungen, GwG-Check
   bei Bar ≥ 100'000, Gutschrift, Mahnwesen mit Mahn-PDFs, E-Mail-Versand,
@@ -71,16 +106,26 @@ Stand: 13.11.2026 (Phase C der Schaltzentrale)
   Rate-Limit/Honeypot) + Fahrzeugbörse + Impressum/Datenschutz
 - **G**: Demo-Seed 1:1 VPS, Doku-Finalisierung
 
-## Verifiziert (Phase A)
+## Verifiziert
 
+**Phase A**
 - API-Smoke: Health/Login/CRUD mit Token, geschützte Routen 401 ohne; Kalkulation
   14'900 − 300 − 1'800 = 12'800 korrekt; Statuswechsel setzt Standtage zurück
 - Upload-Runde im Docker-Vollstack (nginx → API): Foto-Upload 201, öffentliche
   Auslieferung 200, Pfad-Traversal verweigert (400) bzw. von nginx normalisiert
 - UI (Playwright, 9/9): Login → Fahrzeuge → Detail (Foto-Upload, Ankauf-Kalkulation,
   Statuswechsel) → Kunden; mobil ohne horizontalen Überlauf
-- `npm run build` (tsc beider Apps + Vite) fehlerfrei
-- Docker-Vollstack: db push + seed + seed-demo im neuen Image, Port 8080
+
+**Phase D**
+- Docker-Vollstack (Port 8080): db push + seed + seed-demo im neuen Image;
+  Anfragen anlegen/erledigen/löschen, Termine anlegen/Kalender-Listing/löschen,
+  Tafel-PDF (1 A3-Seite, 14.5 KB), alle über nginx — 401 ohne Token
+- UI (Playwright, 12/12): AS24-Vorbereitung, Ausstattungs-Maske + Speichern,
+  Tafel-Karte, Anfragen mit WhatsApp-Klick-Link, Termine, Kalender-Gruppierung,
+  Standtage im Dashboard
+
+Jede Phase: `npm run build` (tsc beider Apps + Vite) fehlerfrei; UI-Tests mobil und
+Desktop; Docker-Vollstack danach `down -v`.
 
 ## Bekannte Hinweise
 

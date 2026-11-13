@@ -5,6 +5,7 @@ import { useAuth } from "./lib/auth";
 import Dashboard from "./pages/Dashboard";
 import FahrzeugDetail from "./pages/FahrzeugDetail";
 import Fahrzeuge from "./pages/Fahrzeuge";
+import Kalender from "./pages/Kalender";
 import Kunden from "./pages/Kunden";
 import Login from "./pages/Login";
 import Posteingang from "./pages/Posteingang";
@@ -35,6 +36,7 @@ export default function App() {
         <Route path="fahrzeuge" element={<Fahrzeuge />} />
         <Route path="fahrzeuge/:id" element={<FahrzeugDetail />} />
         <Route path="kunden" element={<Kunden />} />
+        <Route path="kalender" element={<Kalender />} />
         <Route path="users" element={<Users />} />
         <Route path="settings" element={<Settings />} />
         <Route path="profile" element={<Profile />} />

@@ -169,6 +169,8 @@ model Vehicle {
   targetSalePrice   Decimal? @db.Decimal(12, 2)
   description       String? @db.Text
   as24Url           String?
+  // Sonderausstattungen (geklickt in der Maske, gelistet auf Tafel & Exposé).
+  equipment         String[] @default([])
   createdAt         DateTime      @default(now())
   updatedAt         DateTime      @updatedAt
 
@@ -421,6 +423,7 @@ model Inquiry {
   vehicleId       String?
   contact         Contact?       @relation(fields: [contactId], references: [id], onDelete: SetNull)
   contactId       String?
+  contactName     String? // Ad-hoc-Angabe, wenn noch kein Kontakt angelegt wurde
   channel         InquiryChannel @default(TELEFON)
   subject         String?
   summary         String? @db.Text // Verlauf/Vereinbarung, "mit wem was ausgemacht"

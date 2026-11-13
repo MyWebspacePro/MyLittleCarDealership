@@ -65,6 +65,7 @@ const vehicleFieldsSchema = {
   hasServiceBook: z.coerce.boolean().optional(),
   targetSalePrice: nullablePrice,
   description: nullableText,
+  equipment: z.array(z.string().max(80)).optional(),
   as24Url: z.preprocess(
     (v) => (v === "" || v === null ? null : v),
     z.string().url("Ungültige URL").nullable().optional(),
@@ -130,8 +131,18 @@ const vehicleDetailInclude = {
     orderBy: { createdAt: "desc" as const },
     include: { provider: { select: { id: true, name: true, providerType: true } } },
   },
-  inquiries: { orderBy: { createdAt: "desc" as const } },
-  appointments: { orderBy: { startsAt: "desc" as const } },
+  inquiries: {
+    orderBy: { createdAt: "desc" as const },
+    include: {
+      contact: { select: { id: true, type: true, firstName: true, lastName: true, companyName: true, phone: true, mobile: true, email: true } },
+    },
+  },
+  appointments: {
+    orderBy: { startsAt: "desc" as const },
+    include: {
+      contact: { select: { id: true, type: true, firstName: true, lastName: true, companyName: true, phone: true, mobile: true, email: true } },
+    },
+  },
   generatedDocuments: { orderBy: { createdAt: "desc" as const } },
 } satisfies Prisma.VehicleInclude;
 
@@ -198,6 +209,7 @@ function serializeVehicleDetail(v: VehicleDetailRow) {
   return {
     ...base,
     description: v.description,
+    equipment: v.equipment,
     photos: v.photos,
     documents: v.documents,
     purchase: p
@@ -262,6 +274,16 @@ function serializeVehicleDetail(v: VehicleDetailRow) {
       id: i.id,
       vehicleId: i.vehicleId,
       contactId: i.contactId,
+      contact: i.contact
+        ? {
+            id: i.contact.id,
+            displayName: contactDisplayName(i.contact),
+            phone: i.contact.phone,
+            mobile: i.contact.mobile,
+            email: i.contact.email,
+          }
+        : null,
+      contactName: i.contactName,
       channel: i.channel,
       subject: i.subject,
       summary: i.summary,
@@ -273,6 +295,15 @@ function serializeVehicleDetail(v: VehicleDetailRow) {
       id: a.id,
       vehicleId: a.vehicleId,
       contactId: a.contactId,
+      contact: a.contact
+        ? {
+            id: a.contact.id,
+            displayName: contactDisplayName(a.contact),
+            phone: a.contact.phone,
+            mobile: a.contact.mobile,
+            email: a.contact.email,
+          }
+        : null,
       type: a.type,
       title: a.title,
       startsAt: a.startsAt,
@@ -357,6 +388,7 @@ export async function vehicleRoutes(app: FastifyInstance): Promise<void> {
         hasServiceBook: body.hasServiceBook ?? false,
         targetSalePrice: body.targetSalePrice ?? null,
         description: body.description ?? null,
+        equipment: body.equipment ?? [],
         as24Url: body.as24Url ?? null,
       },
     });
@@ -386,6 +418,7 @@ export async function vehicleRoutes(app: FastifyInstance): Promise<void> {
     if (body.mileageKm !== undefined) data.mileageKm = body.mileageKm ?? null;
     if (body.targetSalePrice !== undefined) data.targetSalePrice = body.targetSalePrice ?? null;
     if (body.hasServiceBook !== undefined) data.hasServiceBook = body.hasServiceBook;
+    if (body.equipment !== undefined) data.equipment = body.equipment;
     // Status hier NICHT setzen: er laeuft ausschliesslich ueber /status,
     // damit statusChangedAt (Standtage) sauber mitgefuehrt wird.
     if (body.status !== undefined) {
