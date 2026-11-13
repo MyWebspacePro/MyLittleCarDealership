@@ -1,0 +1,28 @@
+# TLS + Routing ueber das bestehende Coolify/Traefik-Setup.
+# Voraussetzung: APP_DOMAIN in .env gesetzt, A-Record zeigt auf den Server.
+# Traefik holt das Let's-Encrypt-Zertifikat automatisch.
+services:
+  web:
+    networks:
+      - default
+      - coolify
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=coolify
+      - traefik.http.middlewares.mld-gzip.compress=true
+      - traefik.http.middlewares.mld-redirect.redirectscheme.scheme=https
+      - traefik.http.routers.mld-http.entryPoints=http
+      - traefik.http.routers.mld-http.middlewares=mld-redirect
+      - traefik.http.routers.mld-http.rule=Host(`${APP_DOMAIN}`) && PathPrefix(`/`)
+      - traefik.http.routers.mld-http.service=mld
+      - traefik.http.routers.mld-https.entryPoints=https
+      - traefik.http.routers.mld-https.middlewares=mld-gzip
+      - traefik.http.routers.mld-https.rule=Host(`${APP_DOMAIN}`) && PathPrefix(`/`)
+      - traefik.http.routers.mld-https.service=mld
+      - traefik.http.routers.mld-https.tls=true
+      - traefik.http.routers.mld-https.tls.certresolver=letsencrypt
+      - traefik.http.services.mld.loadbalancer.server.port=80
+
+networks:
+  coolify:
+    external: true

@@ -1,0 +1,57 @@
+# VPS-Variante fuer den Server mit Coolify/Traefik.
+# Eigene Host-Ports sind verboten (80/443/8080 gehoeren Traefik).
+#   docker compose -f docker-compose.vps.yml up -d --build
+# Mit Domain + Let's Encrypt zusaetzlich:
+#   docker compose -f docker-compose.vps.yml -f docker-compose.vps-tls.yml up -d --build
+name: mylittlecardealership
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes: [mld_db_data:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  api:
+    build: { context: ., dockerfile: apps/api/Dockerfile }
+    restart: unless-stopped
+    depends_on:
+      db: { condition: service_healthy }
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+      API_PORT: "3001"
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET}
+      CORS_ORIGINS: ${CORS_ORIGINS:-}
+      SMTP_HOST: ${SMTP_HOST:-localhost}
+      SMTP_PORT: ${SMTP_PORT:-1025}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_FROM: ${SMTP_FROM:-MyLittleCarDealership <noreply@example.ch>}
+
+  web:
+    build: { context: ., dockerfile: apps/web/Dockerfile }
+    restart: unless-stopped
+    depends_on: [api]
+
+  # Tägliches pg_dump, 30 Tage Vorhalt.
+  backup:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    depends_on:
+      db: { condition: service_healthy }
+    environment:
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+    volumes: ["./backups:/backups"]
+    entrypoint: ["/bin/sh", "-c", "while true; do pg_dump -h db -U ${POSTGRES_USER} ${POSTGRES_DB} | gzip > /backups/mld_$$(date +%Y%m%d_%H%M%S).sql.gz; find /backups -name \"*.sql.gz\" -mtime +30 -delete; sleep 86400; done"]
+
+volumes:
+  mld_db_data:

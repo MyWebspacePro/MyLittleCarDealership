@@ -1,0 +1,19 @@
+node_modules/
+dist/
+build/
+coverage/
+
+# Umgebungsvariablen und Geheimnisse
+.env
+.env.local
+.env.*.local
+apps/api/.env
+
+# Datenbank-Backups und Laufzeitdaten
+backups/
+uploads/
+data/
+
+*.log
+.DS_Store
+.zcode/

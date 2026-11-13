@@ -1,0 +1,90 @@
+// MyLittleCarDealership — Prisma Schema
+// Nur Core: Benutzer, Sitzungen, Händler-Stammdaten, Audit-Log.
+// Die Fachmodule (Fahrzeuge, Kunden, Angebote, Rechnungen …) kommen mit den
+// Spezifikationen dazu. Schema-Änderungen laufen über "prisma db push",
+// es gibt bewusst kein migrations-Verzeichnis.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN   // Chef: alles, inkl. Benutzerverwaltung
+  SALES   // Verkauf/Berater
+  FINANCE // Buchhaltung
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  name         String
+  jobTitle     String?
+  role         Role     @default(SALES)
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  sessions  Session[]
+  auditLogs AuditLog[]
+}
+
+// Refresh-Token-Sitzung. Gespeichert wird nur der SHA-256-Hash des Tokens,
+// nie das Token selbst. Beim Refresh wird rotiert; wird ein bereits rotiertes
+// Token erneut benutzt, ist das ein Diebstahl-Verdacht -> alle Sessions sperren.
+model Session {
+  id         String    @id
+  userId     String
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash  String    @unique
+  userAgent  String?
+  ip         String?
+  createdAt  DateTime  @default(now())
+  lastUsedAt DateTime  @default(now())
+  expiresAt  DateTime
+  revokedAt  DateTime?
+  replacedBy String?
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+// Stammdaten des Händlers (Singleton, id = 1).
+model Setting {
+  id               Int      @id @default(1)
+  companyName      String
+  addressLine      String   @default("")
+  zip              String   @default("")
+  city             String   @default("")
+  phone            String   @default("")
+  email            String   @default("")
+  website          String   @default("")
+  vatNumber        String   @default("") // CHE-123.456.789 MWST
+  vatRateStandard  Decimal  @default(8.1) @db.Decimal(5, 2)
+  vatRateReduced   Decimal  @default(2.6) @db.Decimal(5, 2)
+  iban             String   @default("")
+  bankName         String   @default("")
+  paymentDays      Int      @default(30)
+  updatedAt        DateTime @updatedAt
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  action    String
+  entity    String?
+  entityId  String?
+  meta      Json?
+  ip        String?
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([entity, entityId])
+  @@index([createdAt])
+}
