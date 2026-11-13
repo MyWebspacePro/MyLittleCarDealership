@@ -15,6 +15,8 @@ import { vehicleRoutes } from "./modules/vehicles.routes.js";
 import { purchaseRoutes } from "./modules/purchases.routes.js";
 import { documentRoutes } from "./modules/documents.routes.js";
 import { leadRoutes } from "./modules/leads.routes.js";
+import { providerRoutes } from "./modules/providers.routes.js";
+import { workOrderRoutes } from "./modules/workorders.routes.js";
 import { mediaRoutes } from "./modules/media.routes.js";
 
 export async function buildApp() {
@@ -91,6 +93,8 @@ export async function buildApp() {
   await app.register(purchaseRoutes, { prefix: "/api" });
   await app.register(documentRoutes, { prefix: "/api" });
   await app.register(leadRoutes, { prefix: "/api" });
+  await app.register(providerRoutes, { prefix: "/api" });
+  await app.register(workOrderRoutes, { prefix: "/api" });
 
   return app;
 }

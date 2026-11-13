@@ -54,13 +54,16 @@ function refreshAccess(): Promise<boolean> {
 
 export async function api<T>(path: string, options: RequestInit = {}, retry = true): Promise<T> {
   // FormData (Foto-/Dokument-Uploads) setzt den Content-Type selbst —
-  // keinen JSON-Header setzen, sonst bricht der Multipart-Body.
+  // keinen JSON-Header setzen, sonst bricht der Multipart-Body. DELETE
+  // ohne Body: auch ohne JSON-Header schicken, sonst versucht Fastify,
+  // den leeren Body als JSON zu parsen (-> 400).
   const isForm = options.body instanceof FormData;
+  const hasBody = options.body != null && options.body !== "";
   const access = getAccessToken();
   const res = await fetch(`/api${path}`, {
     ...options,
     headers: {
-      ...(isForm ? {} : { "Content-Type": "application/json" }),
+      ...(isForm || !hasBody ? {} : { "Content-Type": "application/json" }),
       ...(access ? { Authorization: `Bearer ${access}` } : {}),
       ...options.headers,
     },

@@ -92,6 +92,18 @@ async function ensureLead(key: { sellerPhone: string; make: string }, data: Reco
   return prisma.purchaseLead.create({ data });
 }
 
+async function ensureProvider(name: string, data: { providerType: string; phone?: string; email?: string }) {
+  const existing = await prisma.provider.findFirst({ where: { name } });
+  if (existing) return existing;
+  return prisma.provider.create({ data: { name, ...data } });
+}
+
+async function ensureWorkOrder(vehicleId: string, description: string, data: Record<string, unknown>) {
+  const existing = await prisma.workOrder.findFirst({ where: { vehicleId, description } });
+  if (existing) return existing;
+  return prisma.workOrder.create({ data: { vehicleId, description, ...data } });
+}
+
 async function main() {
   const max = await ensureContact({
     email: "max.muster@example.ch",
@@ -167,6 +179,18 @@ async function main() {
     ],
   );
 
+  // Anbieter-Stammdaten (Werkstätten, Aufbereiter, externe Spezialisten).
+  const markenWerkstatt = await ensureProvider("BMW Vertretung Schaffhausen", {
+    providerType: "MARKENWERKSTATT",
+    phone: "+41 52 620 00 00",
+  });
+  const partnerWerkstatt = await ensureProvider("Auto-Atelier Schaffhausen", {
+    providerType: "PARTNERWERKSTATT",
+    phone: "+41 52 625 11 11",
+  });
+  const dellenDoktor = await ensureProvider("Dellen-Doktor", { providerType: "EXTERN", phone: "+41 79 400 20 30" });
+  const carpolish = await ensureProvider("CarPolish GmbH", { providerType: "AUFBEREITER", phone: "+41 52 630 40 50" });
+
   const bmw = await ensureVehicle("WBA5E71060G123456", {
     make: "BMW",
     model: "320d",
@@ -203,6 +227,33 @@ async function main() {
       { kind: "AUFBEREITUNG", description: "Detailing extern (Kapazität intern belegt)", amount: 450 },
     ],
   );
+  await ensureWorkOrder(bmw.id, "Klimaanlage nachfüllen, Hinterradlager rechts", {
+    type: "REPARATUR",
+    providerType: "PARTNERWERKSTATT",
+    providerId: partnerWerkstatt.id,
+    status: "FERTIG",
+    costEstimate: 780,
+    costActual: 845,
+    completedAt: new Date(),
+    notes: "Radlager teurer als kalkuliert (PLUS-Kosten Ersatzteil).",
+  });
+  await ensureWorkOrder(bmw.id, "Inspektion inkl. Ölservice, Mikrofilter", {
+    type: "SERVICE",
+    providerType: "MARKENWERKSTATT",
+    providerId: markenWerkstatt.id,
+    status: "IN_ARBEIT",
+    costEstimate: 520,
+    plannedFor: new Date(),
+    notes: "MFK-Renewal gleich mit machen lassen.",
+  });
+  await ensureWorkOrder(bmw.id, "Detailing extern (Kapazität intern belegt)", {
+    type: "AUFBEREITUNG",
+    providerType: "AUFBEREITER",
+    providerId: carpolish.id,
+    status: "GEPLANT",
+    costEstimate: 450,
+    plannedFor: new Date(),
+  });
 
   const fiat = await ensureVehicle("ZFA3120000E123456", {
     make: "Fiat",
@@ -286,6 +337,7 @@ async function main() {
   console.log(`  Kontakte:   max.muster@example.ch, petra.beispiel@example.ch, fleet@musterlogistik.ch`);
   console.log(`  Fahrzeuge:  Golf (VERKAUF), BMW 320d (AUFBEREITUNG), Fiat 500 (KALKULATION), A3 (ANGEFRAGT)`);
   console.log(`  Posteingang: 2 offene Ankaufsanfragen (WhatsApp, E-Mail)`);
+  console.log(`  Aufträge:    BMW 320d (Fertig/In Arbeit/Geplant) · Anbieter: 4 Partner`);
 }
 
 main()

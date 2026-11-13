@@ -299,21 +299,7 @@ export interface VehicleDetail extends VehicleBase {
   purchase: PurchaseDeal | null;
   sale: SaleDeal | null;
   generatedDocuments: GeneratedDocumentInfo[];
-  workOrders: {
-    id: string;
-    vehicleId: string;
-    type: string;
-    providerType: string;
-    providerName: string | null;
-    description: string;
-    status: string;
-    costEstimate: number | null;
-    costActual: number | null;
-    plannedFor: string | null;
-    completedAt: string | null;
-    notes: string | null;
-    createdAt: string;
-  }[];
+  workOrders: WorkOrder[];
   inquiries: {
     id: string;
     vehicleId: string | null;
@@ -433,3 +419,91 @@ export const GENERATED_DOC_LABELS: Record<GeneratedDocumentInfo["documentType"],
   ZUSAMMENFASSUNG: "Verkaufszusammenfassung",
   SONSTIGES: "Sonstiges",
 };
+
+// ── Aufbereitung: Aufträge & Anbieter ────────────────────────────────────────
+
+export type WorkOrderType = "REPARATUR" | "SERVICE" | "AUFBEREITUNG" | "MFK" | "SONSTIGES";
+
+export const WORK_ORDER_TYPES = Object.keys({
+  REPARATUR: "",
+  SERVICE: "",
+  AUFBEREITUNG: "",
+  MFK: "",
+  SONSTIGES: "",
+}) as WorkOrderType[];
+
+export const WORK_ORDER_TYPE_LABELS: Record<WorkOrderType, string> = {
+  REPARATUR: "Reparatur",
+  SERVICE: "Service / Wartung",
+  AUFBEREITUNG: "Aufbereitung",
+  MFK: "MFK",
+  SONSTIGES: "Sonstiges",
+};
+
+export type ProviderType = "INTERN" | "MARKENWERKSTATT" | "PARTNERWERKSTATT" | "EXTERN" | "AUFBEREITER";
+
+export const PROVIDER_TYPES = Object.keys({
+  INTERN: "",
+  MARKENWERKSTATT: "",
+  PARTNERWERKSTATT: "",
+  EXTERN: "",
+  AUFBEREITER: "",
+}) as ProviderType[];
+
+export const PROVIDER_TYPE_LABELS: Record<ProviderType, string> = {
+  INTERN: "Intern",
+  MARKENWERKSTATT: "Markenwerkstatt",
+  PARTNERWERKSTATT: "Partnerwerkstatt",
+  EXTERN: "Extern",
+  AUFBEREITER: "Aufbereiter",
+};
+
+export type WorkOrderStatus = "GEPLANT" | "IN_ARBEIT" | "FERTIG" | "ABGESCHLOSSEN";
+
+export const WORK_ORDER_STATUSES = Object.keys({
+  GEPLANT: "",
+  IN_ARBEIT: "",
+  FERTIG: "",
+  ABGESCHLOSSEN: "",
+}) as WorkOrderStatus[];
+
+export const WORK_ORDER_STATUS_LABELS: Record<WorkOrderStatus, string> = {
+  GEPLANT: "Geplant",
+  IN_ARBEIT: "In Arbeit",
+  FERTIG: "Fertig",
+  ABGESCHLOSSEN: "Abgeschlossen",
+};
+
+export const WORK_ORDER_STATUS_STYLES: Record<WorkOrderStatus, string> = {
+  GEPLANT: "bg-slate-100 text-slate-700 ring-slate-200",
+  IN_ARBEIT: "bg-amber-50 text-amber-700 ring-amber-200",
+  FERTIG: "bg-blue-50 text-blue-700 ring-blue-200",
+  ABGESCHLOSSEN: "bg-emerald-50 text-emerald-700 ring-emerald-200",
+};
+
+export interface Provider {
+  id: string;
+  name: string;
+  providerType: ProviderType;
+  phone: string | null;
+  email: string | null;
+  notes: string | null;
+}
+
+export interface WorkOrder {
+  id: string;
+  vehicleId: string;
+  type: WorkOrderType;
+  providerType: ProviderType;
+  providerId: string | null;
+  provider: { id: string; name: string } | null;
+  providerName: string | null;
+  description: string;
+  status: WorkOrderStatus;
+  costEstimate: number | null;
+  costActual: number | null;
+  plannedFor: string | null;
+  completedAt: string | null;
+  notes: string | null;
+  createdAt: string;
+}

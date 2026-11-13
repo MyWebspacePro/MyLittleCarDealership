@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import type { FormEvent } from "react";
 import { Link, useParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, ArrowLeftSquare, ArrowRightSquare, Download, ExternalLink, FileText, Info, Plus, Save, Trash2, Upload } from "lucide-react";
+import { ArrowLeft, ArrowLeftSquare, ArrowRightSquare, Download, ExternalLink, FileText, Info, Pencil, Plus, Save, Trash2, Upload } from "lucide-react";
 import { api, apiDownload } from "../lib/api";
 import {
   chf,
@@ -10,6 +10,8 @@ import {
   DOCUMENT_KINDS,
   DOCUMENT_KIND_LABELS,
   GENERATED_DOC_LABELS,
+  PROVIDER_TYPES,
+  PROVIDER_TYPE_LABELS,
   PURCHASE_CHANNELS,
   PURCHASE_CHANNEL_LABELS,
   PURCHASE_PAYMENT_LABELS,
@@ -20,9 +22,16 @@ import {
   VEHICLE_STATUSES,
   VEHICLE_STATUS_LABELS,
   VEHICLE_STATUS_STYLES,
+  WORK_ORDER_STATUSES,
+  WORK_ORDER_STATUS_LABELS,
+  WORK_ORDER_STATUS_STYLES,
+  WORK_ORDER_TYPES,
+  WORK_ORDER_TYPE_LABELS,
   type ContactListItem,
   type DocumentKind,
   type GeneratedDocumentInfo,
+  type Provider,
+  type ProviderType,
   type PurchaseDeal,
   type PurchasePaymentMethod,
   type PurchaseStatus,
@@ -32,6 +41,9 @@ import {
   type ValuationKind,
   type VehicleDetail,
   type VehicleStatus,
+  type WorkOrder,
+  type WorkOrderStatus,
+  type WorkOrderType,
 } from "../lib/types";
 import { Alert, Badge, Button, Card, CardHeader, Field, Input, Modal, Select, Spinner } from "../components/ui";
 
@@ -126,6 +138,49 @@ function PhasePlaceholder({ title, phase, text }: { title: string; phase: string
   );
 }
 
+type WorkOrderForm = {
+  type: WorkOrderType;
+  providerType: ProviderType;
+  providerId: string; // "" = ohne gespeicherten Anbieter (Freitext möglich)
+  providerName: string;
+  description: string;
+  costEstimate: string;
+  costActual: string;
+  status: WorkOrderStatus;
+  plannedFor: string;
+  notes: string;
+};
+
+function emptyWorkOrderForm(): WorkOrderForm {
+  return {
+    type: "REPARATUR",
+    providerType: "PARTNERWERKSTATT",
+    providerId: "",
+    providerName: "",
+    description: "",
+    costEstimate: "",
+    costActual: "",
+    status: "GEPLANT",
+    plannedFor: "",
+    notes: "",
+  };
+}
+
+function toWorkOrderForm(w: WorkOrder): WorkOrderForm {
+  return {
+    type: w.type,
+    providerType: w.providerType,
+    providerId: w.providerId ?? "",
+    providerName: w.providerName ?? "",
+    description: w.description,
+    costEstimate: w.costEstimate?.toString() ?? "",
+    costActual: w.costActual?.toString() ?? "",
+    status: w.status,
+    plannedFor: w.plannedFor ? w.plannedFor.slice(0, 10) : "",
+    notes: w.notes ?? "",
+  };
+}
+
 export default function FahrzeugDetail() {
   const { id } = useParams<{ id: string }>();
   const queryClient = useQueryClient();
@@ -151,6 +206,15 @@ export default function FahrzeugDetail() {
   const [pageError, setPageError] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const [docKind, setDocKind] = useState<DocumentKind>("SONSTIGES");
+  const [woModalOpen, setWoModalOpen] = useState(false);
+  const [woEditing, setWoEditing] = useState<WorkOrder | null>(null);
+  const [woForm, setWoForm] = useState<WorkOrderForm>(emptyWorkOrderForm());
+  const [providerAddOpen, setProviderAddOpen] = useState(false);
+  const [providerForm, setProviderForm] = useState<{ name: string; providerType: ProviderType; phone: string }>({
+    name: "",
+    providerType: "PARTNERWERKSTATT",
+    phone: "",
+  });
 
   const { data: vehicle, isLoading } = useQuery({
     queryKey: ["vehicle", id],
@@ -166,6 +230,11 @@ export default function FahrzeugDetail() {
   const { data: settings } = useQuery({
     queryKey: ["settings"],
     queryFn: () => api<Setting>("/settings"),
+  });
+
+  const { data: providers } = useQuery({
+    queryKey: ["providers"],
+    queryFn: () => api<Provider[]>("/providers"),
   });
 
   // Formulare mit geladenen Daten füllen (einmal pro Ankaufsvorgang).
@@ -287,6 +356,67 @@ export default function FahrzeugDetail() {
   const offerPdfMutation = pdfMutation("offer-pdf");
   const contractPdfMutation = pdfMutation("contract-pdf");
 
+  function submitWorkOrder(event: FormEvent) {
+    event.preventDefault();
+    setPageError(null);
+    const body = {
+      ...woForm,
+      costEstimate: woForm.costEstimate || null,
+      costActual: woForm.costActual || null,
+      plannedFor: woForm.plannedFor || null,
+      providerName: woForm.providerId ? undefined : woForm.providerName || null,
+    };
+    if (woEditing) {
+      updateWorkOrderMutation.mutate({ id: woEditing.id, body });
+    } else {
+      createWorkOrderMutation.mutate(body);
+    }
+  }
+
+  const createWorkOrderMutation = useMutation({
+    mutationFn: (body: Record<string, unknown>) =>
+      api(`/vehicles/${id}/workorders`, { method: "POST", body: JSON.stringify(body) }),
+    onSuccess: () => {
+      setWoModalOpen(false);
+      setWoEditing(null);
+      invalidate();
+    },
+    onError: (err: Error) => setPageError(err.message),
+  });
+
+  const updateWorkOrderMutation = useMutation({
+    mutationFn: (payload: { id: string; body: Record<string, unknown> }) =>
+      api(`/workorders/${payload.id}`, { method: "PUT", body: JSON.stringify(payload.body) }),
+    onSuccess: () => {
+      setWoModalOpen(false);
+      setWoEditing(null);
+      invalidate();
+    },
+    onError: (err: Error) => setPageError(err.message),
+  });
+
+  const deleteWorkOrderMutation = useMutation({
+    mutationFn: (workOrderId: string) => api(`/workorders/${workOrderId}`, { method: "DELETE" }),
+    onSuccess: invalidate,
+    onError: (err: Error) => setPageError(err.message),
+  });
+
+  const createProviderMutation = useMutation({
+    mutationFn: () => api("/providers", { method: "POST", body: JSON.stringify(providerForm) }),
+    onSuccess: () => {
+      setProviderAddOpen(false);
+      setProviderForm({ name: "", providerType: "PARTNERWERKSTATT", phone: "" });
+      void queryClient.invalidateQueries({ queryKey: ["providers"] });
+    },
+    onError: (err: Error) => setPageError(err.message),
+  });
+
+  const deleteProviderMutation = useMutation({
+    mutationFn: (providerId: string) => api(`/providers/${providerId}`, { method: "DELETE" }),
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["providers"] }),
+    onError: (err: Error) => setPageError(err.message),
+  });
+
   // Live-Kalkulation (Spiegel der Server-Logik).
   const calc = useMemo(() => {
     const form = purchaseForm;
@@ -298,6 +428,9 @@ export default function FahrzeugDetail() {
     const profit = estimated != null ? Math.round(estimated - costs - (purchasePrice ?? 0)) : null;
     return { costs, estimated, recommendation, profit, purchasePrice };
   }, [purchaseForm, items, settings]);
+
+  // Ist-Kosten aus den Aufträgen (Phase C) für den Soll/Ist-Vergleich.
+  const woIst = (vehicle?.workOrders ?? []).reduce((sum, w) => sum + (w.costActual ?? 0), 0);
 
   if (isLoading) {
     return (
@@ -746,6 +879,17 @@ export default function FahrzeugDetail() {
                     <p className="mt-1 text-lg font-bold text-slate-900">{chf(calc.costs)}</p>
                   </div>
                 </div>
+                {woIst > 0 ? (
+                  <p className="text-xs text-slate-500">
+                    Ist-Kosten laut Aufträgen: <strong className="text-slate-700">{chf(woIst)}</strong>
+                    {calc.estimated != null && calc.purchasePrice != null ? (
+                      <>
+                        {" · "}
+                        Gewinn mit Ist-Kosten: <strong className="text-slate-700">{chf(calc.estimated - woIst - calc.purchasePrice)}</strong>
+                      </>
+                    ) : null}
+                  </p>
+                ) : null}
                 {purchaseForm?.paymentMethod === "EINTAUSCH" ? (
                   <Alert kind="info">
                     <span className="inline-flex items-start gap-2">
@@ -922,11 +1066,134 @@ export default function FahrzeugDetail() {
       ) : null}
 
       {tab === "auftraege" ? (
-        <PhasePlaceholder
-          title="Aufträge & Aufbereitung"
-          phase="Phase C"
-          text="Reparatur, Service, MFK und Aufbereitung — intern, Markenwerkstatt, Partnerwerkstatt oder extern."
-        />
+        <div className="space-y-6">
+          <Card>
+            <CardHeader
+              title="Aufträge"
+              description="Reparatur, Service, MFK und Aufbereitung — intern, bei der Marken- oder Partnerwerkstatt oder extern."
+              actions={
+                <div className="flex items-center gap-3">
+                  <span className="text-xs text-slate-500">
+                    Soll <strong className="text-slate-700">{chf((vehicle.workOrders ?? []).reduce((s, w) => s + (w.costEstimate ?? 0), 0))}</strong>
+                    {" · "}
+                    Ist <strong className="text-slate-700">{chf(woIst)}</strong>
+                  </span>
+                  <Button
+                    size="sm"
+                    onClick={() => {
+                      setWoForm(emptyWorkOrderForm());
+                      setWoEditing(null);
+                      setWoModalOpen(true);
+                    }}
+                  >
+                    <Plus size={14} /> Auftrag anlegen
+                  </Button>
+                </div>
+              }
+            />
+            <div className="divide-y divide-slate-100">
+              {(vehicle.workOrders ?? []).length === 0 ? (
+                <p className="px-5 py-8 text-center text-sm text-slate-500">
+                  Noch keine Aufträge. Beim Abschluss des Ankaufs werden die Kalkulationspositionen automatisch als geplante
+                  Aufträge übernommen — oder lege hier direkt einen an.
+                </p>
+              ) : (
+                (vehicle.workOrders ?? []).map((w) => (
+                  <div key={w.id} className="flex flex-wrap items-center justify-between gap-3 px-5 py-3.5">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Badge className="bg-slate-100 text-slate-700 ring-slate-200">{WORK_ORDER_TYPE_LABELS[w.type]}</Badge>
+                        <Badge className="bg-slate-50 text-slate-500 ring-slate-200">{PROVIDER_TYPE_LABELS[w.providerType]}</Badge>
+                        <Badge className={WORK_ORDER_STATUS_STYLES[w.status]}>{WORK_ORDER_STATUS_LABELS[w.status]}</Badge>
+                        <span className="text-[11px] text-slate-400">
+                          {w.plannedFor ? `geplant: ${formatDate(w.plannedFor)}` : null}
+                          {w.completedAt ? ` · fertig: ${formatDate(w.completedAt)}` : null}
+                        </span>
+                      </div>
+                      <p className="mt-1 text-sm text-slate-800">{w.description}</p>
+                      <p className="text-xs text-slate-500">
+                        {w.provider?.name ?? w.providerName ?? "ohne fixen Anbieter"}
+                        {w.costEstimate != null ? ` · Soll ${chf(w.costEstimate)}` : ""}
+                        {w.costActual != null ? ` · Ist ${chf(w.costActual)}` : ""}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <Select
+                        value={w.status}
+                        className="w-36"
+                        aria-label="Auftragsstatus"
+                        onChange={(e) =>
+                          updateWorkOrderMutation.mutate({ id: w.id, body: { status: e.target.value as WorkOrderStatus } })
+                        }
+                      >
+                        {WORK_ORDER_STATUSES.map((s) => (
+                          <option key={s} value={s}>
+                            {WORK_ORDER_STATUS_LABELS[s]}
+                          </option>
+                        ))}
+                      </Select>
+                      <button
+                        type="button"
+                        title="Bearbeiten"
+                        onClick={() => {
+                          setWoForm(toWorkOrderForm(w));
+                          setWoEditing(w);
+                          setWoModalOpen(true);
+                        }}
+                        className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+                      >
+                        <Pencil size={15} />
+                      </button>
+                      <button
+                        type="button"
+                        title="Löschen"
+                        onClick={() => deleteWorkOrderMutation.mutate(w.id)}
+                        className="rounded-lg p-1.5 text-slate-400 hover:bg-rose-50 hover:text-rose-600"
+                      >
+                        <Trash2 size={15} />
+                      </button>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </Card>
+
+          <Card>
+            <CardHeader
+              title="Anbieter"
+              description="Partnerwerkstätten, Markenwerkstatt, Aufbereiter und externe Spezialisten."
+              actions={
+                <Button size="sm" variant="secondary" onClick={() => setProviderAddOpen(true)}>
+                  <Plus size={14} /> Anbieter
+                </Button>
+              }
+            />
+            <div className="divide-y divide-slate-100 px-5">
+              {(providers ?? []).length === 0 ? (
+                <p className="py-6 text-center text-sm text-slate-500">Noch keine Anbieter erfasst.</p>
+              ) : (
+                (providers ?? []).map((pv) => (
+                  <div key={pv.id} className="flex items-center justify-between gap-3 py-2.5">
+                    <div className="flex min-w-0 items-center gap-2">
+                      <Badge className="bg-slate-100 text-slate-600 ring-slate-200">{PROVIDER_TYPE_LABELS[pv.providerType]}</Badge>
+                      <span className="truncate text-sm text-slate-800">{pv.name}</span>
+                      {pv.phone ? <span className="text-xs text-slate-500">{pv.phone}</span> : null}
+                    </div>
+                    <button
+                      type="button"
+                      title="Löschen"
+                      onClick={() => deleteProviderMutation.mutate(pv.id)}
+                      className="rounded-lg p-1.5 text-slate-400 hover:bg-rose-50 hover:text-rose-600"
+                    >
+                      <Trash2 size={15} />
+                    </button>
+                  </div>
+                ))
+              )}
+            </div>
+          </Card>
+        </div>
       ) : null}
       {tab === "verkauf" ? (
         <PhasePlaceholder
@@ -1092,6 +1359,147 @@ export default function FahrzeugDetail() {
             </Button>
             <Button type="submit" disabled={createPurchaseMutation.isPending}>
               {createPurchaseMutation.isPending ? "Anlegen …" : "Anlegen"}
+            </Button>
+          </div>
+        </form>
+      </Modal>
+      {/* Auftrag anlegen / bearbeiten */}
+      <Modal
+        open={woModalOpen}
+        title={woEditing ? "Auftrag bearbeiten" : "Auftrag anlegen"}
+        description="Reparatur, Service, MFK oder Aufbereitung — mit passendem Anbieter-Typ."
+        onClose={() => setWoModalOpen(false)}
+      >
+        <form onSubmit={submitWorkOrder} className="space-y-4">
+          <div className="grid grid-cols-3 gap-3">
+            <Field label="Art">
+              <Select value={woForm.type} onChange={(e) => setWoForm({ ...woForm, type: e.target.value as WorkOrderType })}>
+                {WORK_ORDER_TYPES.map((t) => (
+                  <option key={t} value={t}>
+                    {WORK_ORDER_TYPE_LABELS[t]}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+            <Field label="Anbieter-Typ">
+              <Select
+                value={woForm.providerType}
+                onChange={(e) => setWoForm({ ...woForm, providerType: e.target.value as ProviderType })}
+              >
+                {PROVIDER_TYPES.map((t) => (
+                  <option key={t} value={t}>
+                    {PROVIDER_TYPE_LABELS[t]}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+            <Field label="Status">
+              <Select value={woForm.status} onChange={(e) => setWoForm({ ...woForm, status: e.target.value as WorkOrderStatus })}>
+                {WORK_ORDER_STATUSES.map((s) => (
+                  <option key={s} value={s}>
+                    {WORK_ORDER_STATUS_LABELS[s]}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+          </div>
+          <Field label="Beschreibung *">
+            <Input
+              value={woForm.description}
+              onChange={(e) => setWoForm({ ...woForm, description: e.target.value })}
+              placeholder="z. B. Hinterradlager rechts ersetzen"
+              required
+            />
+          </Field>
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Anbieter" hint="aus Stammdaten — oder leer lassen für Freitext">
+              <Select value={woForm.providerId} onChange={(e) => setWoForm({ ...woForm, providerId: e.target.value })}>
+                <option value="">– ohne gespeicherten Anbieter –</option>
+                {(providers ?? []).map((pv) => (
+                  <option key={pv.id} value={pv.id}>
+                    {pv.name} ({PROVIDER_TYPE_LABELS[pv.providerType]})
+                  </option>
+                ))}
+              </Select>
+            </Field>
+            {!woForm.providerId ? (
+              <Field label="Anbieter (Freitext)">
+                <Input
+                  value={woForm.providerName}
+                  onChange={(e) => setWoForm({ ...woForm, providerName: e.target.value })}
+                  placeholder="z. B. Dellen-Doktor"
+                />
+              </Field>
+            ) : null}
+          </div>
+          <div className="grid grid-cols-3 gap-3">
+            <Field label="Kosten-Schätzung (CHF)">
+              <Input type="number" min={0} step={10} value={woForm.costEstimate} onChange={(e) => setWoForm({ ...woForm, costEstimate: e.target.value })} />
+            </Field>
+            {woEditing ? (
+              <Field label="Ist-Kosten (CHF)">
+                <Input type="number" min={0} step={10} value={woForm.costActual} onChange={(e) => setWoForm({ ...woForm, costActual: e.target.value })} />
+              </Field>
+            ) : null}
+            <Field label="Geplant für">
+              <Input type="date" value={woForm.plannedFor} onChange={(e) => setWoForm({ ...woForm, plannedFor: e.target.value })} />
+            </Field>
+          </div>
+          <Field label="Notizen">
+            <textarea
+              rows={2}
+              value={woForm.notes}
+              onChange={(e) => setWoForm({ ...woForm, notes: e.target.value })}
+              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-slate-500 focus:outline-none focus:ring-2 focus:ring-slate-900/10"
+            />
+          </Field>
+          <div className="flex justify-end gap-2 pt-2">
+            <Button type="button" variant="secondary" onClick={() => setWoModalOpen(false)}>
+              Abbrechen
+            </Button>
+            <Button type="submit" disabled={createWorkOrderMutation.isPending || updateWorkOrderMutation.isPending}>
+              {createWorkOrderMutation.isPending || updateWorkOrderMutation.isPending ? "Speichern …" : "Speichern"}
+            </Button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* Anbieter anlegen */}
+      <Modal open={providerAddOpen} title="Anbieter anlegen" description="Werkstatt, Aufbereiter oder externer Spezialist als Stammdaten." onClose={() => setProviderAddOpen(false)}>
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            setPageError(null);
+            createProviderMutation.mutate();
+          }}
+          className="space-y-4"
+        >
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Name *">
+              <Input value={providerForm.name} onChange={(e) => setProviderForm({ ...providerForm, name: e.target.value })} required />
+            </Field>
+            <Field label="Typ">
+              <Select
+                value={providerForm.providerType}
+                onChange={(e) => setProviderForm({ ...providerForm, providerType: e.target.value as ProviderType })}
+              >
+                {PROVIDER_TYPES.map((t) => (
+                  <option key={t} value={t}>
+                    {PROVIDER_TYPE_LABELS[t]}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+          </div>
+          <Field label="Telefon">
+            <Input value={providerForm.phone} onChange={(e) => setProviderForm({ ...providerForm, phone: e.target.value })} />
+          </Field>
+          <div className="flex justify-end gap-2 pt-2">
+            <Button type="button" variant="secondary" onClick={() => setProviderAddOpen(false)}>
+              Abbrechen
+            </Button>
+            <Button type="submit" disabled={createProviderMutation.isPending}>
+              {createProviderMutation.isPending ? "Speichern …" : "Speichern"}
             </Button>
           </div>
         </form>

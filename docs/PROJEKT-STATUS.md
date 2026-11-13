@@ -1,6 +1,6 @@
 # Projekt-Status
 
-Stand: 13.11.2026 (Phase B der Schaltzentrale)
+Stand: 13.11.2026 (Phase C der Schaltzentrale)
 
 ## Live
 
@@ -57,11 +57,10 @@ Stand: 13.11.2026 (Phase B der Schaltzentrale)
   StrictMode) teilen sich einen /auth/refresh; davor konnte die Doppel-Refresh-Race
   die Session-Rotation als Diebstahl werten und alle Sessions sperren
 
-## Offen / als Nächstes (Phasen C–G)
+## Offen / als Nächstes (Phasen D–G)
 
 - **B Ankauf** ✓ (13.11.2026): Leads, Übernehmen, Angebots-/Ankaufsvertrag-PDF, Eintausch
-- **C Aufbereitung**: Aufträge (intern / Markenwerkstatt / Partnerwerkstatt / extern /
-  Aufbereiter), Ist-Kosten fliessen in die Kalkulation zurück
+- **C Aufbereitung** ✓ (13.11.2026): Aufträge mit Anbieter-Typen, Soll/Ist-Rückfluss, Automatik
 - **D Verkauf-Frontend**: Exposé + AS24-Vorbereitung (kopierfertig), A3-Tafel-PDF mit QR,
   Anfragen-Protokoll mit Klick-Links, Termine/Kalender, Standtage im Dashboard
 - **E Abschluss**: Kaufvertrag-PDF (OR-Klauseln), Schweizer QR-Rechnung (`swissqrbill`,

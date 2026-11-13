@@ -9,6 +9,8 @@ const PURCHASE_CHANNELS = ["WEBFORM", "WHATSAPP", "EMAIL", "TELEFON", "PERSOENLI
 const PURCHASE_STATUSES = ["LEAD", "KALKULIERT", "ANGEBOT_ERSTELLT", "ANGEBOT_ANGENOMMEN", "ABGESCHLOSSEN", "ABGELEHNT"] as const;
 const PAYMENT_METHODS = ["BAR", "UEBERWEISUNG", "EINTAUSCH"] as const;
 const VALUATION_KINDS = ["AUFBEREITUNG", "REPARATUR", "SERVICE", "SONSTIGES"] as const;
+const WORK_ORDER_TYPES = ["REPARATUR", "SERVICE", "AUFBEREITUNG", "MFK", "SONSTIGES"] as const;
+const PROVIDER_TYPES = ["INTERN", "MARKENWERKSTATT", "PARTNERWERKSTATT", "EXTERN", "AUFBEREITER"] as const;
 
 const idParams = z.object({ id: z.string().min(1) });
 
@@ -120,6 +122,45 @@ async function computeRecommendedPrice(dealId: string): Promise<number | null> {
 // AUFBEREITUNG wieder auf GEKAUFT).
 const PIPELINE_BEFORE_PURCHASE = ["ANGEFRAGT", "KALKULATION", "ANGEBOT", "GEKAUFT"];
 
+// Kalkulationsart -> Auftragstyp -> sinnvoller Standard-Anbieter.
+const VALUATION_TO_WORK_ORDER: Record<
+  string,
+  { type: (typeof WORK_ORDER_TYPES)[number]; providerType: (typeof PROVIDER_TYPES)[number] }
+> = {
+  AUFBEREITUNG: { type: "AUFBEREITUNG", providerType: "AUFBEREITER" },
+  REPARATUR: { type: "REPARATUR", providerType: "PARTNERWERKSTATT" },
+  SERVICE: { type: "SERVICE", providerType: "MARKENWERKSTATT" },
+  SONSTIGES: { type: "SONSTIGES", providerType: "EXTERN" },
+};
+
+/**
+ * Automatik beim Abschluss des Ankaufs: aus jeder Kalkulationsposition wird
+ * ein geplanter Auftrag (Reparatur → Partnerwerkstatt, Service → Markenwerkstatt,
+ * Aufbereitung → Aufbereiter, Sonstiges → extern) — die Schritte für die
+ * Aufbereitung sind damit direkt eingeleitet.
+ */
+async function seedWorkOrdersFromValuation(vehicleId: string): Promise<void> {
+  const existing = await prisma.workOrder.count({ where: { vehicleId } });
+  if (existing > 0) return; // nie duplizieren
+  const deal = await prisma.purchaseDeal.findUnique({
+    where: { vehicleId },
+    include: { valuationItems: true },
+  });
+  if (!deal || !deal.valuationItems.length) return;
+  await prisma.workOrder.createMany({
+    data: deal.valuationItems.map((item) => {
+      const map = VALUATION_TO_WORK_ORDER[item.kind] ?? { type: "SONSTIGES", providerType: "EXTERN" };
+      return {
+        vehicleId,
+        type: map.type,
+        providerType: map.providerType,
+        description: item.description,
+        costEstimate: item.amount,
+      };
+    }),
+  });
+}
+
 async function syncVehicleStatus(vehicleId: string, dealStatus: string): Promise<void> {
   const vehicle = await prisma.vehicle.findUnique({ where: { id: vehicleId }, select: { status: true } });
   if (!vehicle || !PIPELINE_BEFORE_PURCHASE.includes(vehicle.status)) return;
@@ -213,7 +254,12 @@ export async function purchaseRoutes(app: FastifyInstance): Promise<void> {
     });
     const recommendedPrice = await computeRecommendedPrice(id);
     await prisma.purchaseDeal.update({ where: { id }, data: { recommendedPrice } });
-    if (body.status !== undefined) await syncVehicleStatus(deal.vehicleId, body.status);
+    if (body.status !== undefined) {
+      await syncVehicleStatus(deal.vehicleId, body.status);
+      if (body.status === "ABGESCHLOSSEN" && existing.status !== "ABGESCHLOSSEN") {
+        await seedWorkOrdersFromValuation(deal.vehicleId);
+      }
+    }
     await audit(req.user!.id, "UPDATE", "PurchaseDeal", id, { fields: Object.keys(data), items: body.valuationItems?.length });
 
     const fresh = await prisma.purchaseDeal.findUnique({
