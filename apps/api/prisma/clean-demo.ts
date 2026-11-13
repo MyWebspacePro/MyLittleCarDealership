@@ -10,7 +10,7 @@ async function main() {
   const golf = await prisma.vehicle.findFirst({ where: { chassisNumber: "WVWZZZAU8WA123456" } });
   if (!golf) throw new Error("Demo-Golf fehlt — zuerst seed-demo ausführen");
   const docs = await prisma.generatedDocument.findMany({
-    where: { vehicleId: golf.id, documentType: { in: ["RECHNUNG", "MAHNUNG", "KAUFVERTRAG", "ZUSAMMENFASSUNG", "LEASING_DOSSIER"] } },
+    where: { vehicleId: golf.id, documentType: { in: ["RECHNUNG", "MAHNUNG", "KAUFVERTRAG", "ZUSAMMENFASSUNG", "LEASING_DOSSIER", "TAFAEL"] } },
   });
   for (const d of docs) await prisma.generatedDocument.delete({ where: { id: d.id } });
   const sale = await prisma.saleDeal.findUnique({ where: { vehicleId: golf.id } });

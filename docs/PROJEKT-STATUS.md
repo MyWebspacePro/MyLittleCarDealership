@@ -1,6 +1,6 @@
 # Projekt-Status
 
-Stand: 13.11.2026 (Phase F der Schaltzentrale)
+Stand: 13.11.2026 (Phase G — Schaltzentrale vollständig umgesetzt)
 
 ## Live
 
@@ -120,10 +120,18 @@ Stand: 13.11.2026 (Phase F der Schaltzentrale)
   401-Redirect des API-Clients nimmt öffentliche Pfade aus — Gäste werden nicht
   mehr zum Login geschossen
 
-## Offen / als Nächstes (Phase G)
+## Offen / als Nächstes
+
 - **A Fundament** ✓ · **B Ankauf** ✓ · **C Aufbereitung** ✓ · **D Verkauf-Frontend** ✓ ·
-  **E Abschluss** ✓ · **F Öffentliche Seite** ✓ (je 13.11.2026, Details oben)
-- **G**: Doku-Finalisierung (README/VPS-ÜBERGABE), End-to-End live verifizieren
+  **E Abschluss** ✓ · **F Öffentliche Seite** ✓ · **G Doku & Live-Verifikation** ✓
+  (je 13.11.2026, Details oben)
+- **Betreiber-Aufgaben** (siehe README/VPS-ÜBERGABE): eigener QR-IBAN der Bank,
+  Impressum mit echten Angaben, SMTP für den PDF-E-Mail-Versand, AS24-Portal-Link,
+  Partner-Namen (Werkstatt/Leasing/Garantie) als Stammdaten
+- **Ausbaustufen** (bewusst zurückgestellt): WhatsApp Cloud API / IMAP-Eingang
+  (Kommunikation bleibt manuell protokolliert mit Klick-Links), AutoScout24 Listing
+  Creation API (braucht Händler-Account-Freischaltung), npm-audit-Advisories
+  (zod 4 / react-router 7 / nodemailer 10 — Breaking Changes, geprüft einbauen)
 
 ## Verifiziert
 

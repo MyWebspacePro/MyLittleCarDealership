@@ -1,6 +1,6 @@
 # VPS-Übergabe: MyLittleCarDealership
 
-Stand: 13.11.2026 · Deployed von ZCode per SSH · Server-Verwaltung danach: **Hermes**
+Stand: 13.11.2026 (Phase G · Schaltzentrale komplett) · Deployed von ZCode per SSH · Server-Verwaltung danach: **Hermes**
 
 ## Was läuft wo
 
@@ -17,6 +17,35 @@ Container (Projektname `mylittlecardealership`):
 | `mylittlecardealership-api-1` | Fastify-API | nur intern |
 | `mylittlecardealership-web-1` | nginx + React-Build | nur intern (80) |
 | `mylittlecardealership-backup-1` | tägliches `pg_dump` | – |
+
+**Keine eigenen Host-Ports.** Das Routing macht das bestehende Traefik/Coolify-Setup:
+`web` hängt im externen Netz `coolify`, Traefik-Labels mit Präfix `mld-`, Zertifikat
+automatisch via Let's Encrypt.
+
+## Was die App kann (kurz)
+
+- **Öffentlich** (ohne Login): Landing `/`, Fahrzeugbörse `/boerse`, Ankauffsformular
+  `/ankauf` (Fotos + Fahrzeugausweis, nDSG-Einwilligung, Rate-Limit/Honeypot),
+  Impressum/Datenschutz. Anfragen landen als Lead im internen Posteingang und
+  lösen eine E-Mail an den Betrieb aus (sofern SMTP konfiguriert).
+- **Intern** (Login): Ankauf (Posteingang → Kalkulation → Angebots-/Vertrags-PDF),
+  Aufbereitung (Aufträge/Soll-Ist), Verkauf (AS24-Vorbereitung, A3-Tafel mit QR,
+  Anfragen/Kalender), Abschluss (Kaufvertrag, **QR-Rechnung**, Leasing, Zahlungen,
+  Mahnwesen, Gutschrift, Zusammenfassungs-PDF), Auswertungen + Buchhaltungsexport CSV.
+- Uploads liegen im Docker-Volume `uploads` (Fotos öffentlich unter `/uploads/photos`,
+  Belege nur authentifiziert) — **nicht** löschen.
+
+## Betreiber-Aufgaben (im System, nicht am Server)
+
+- **QR-IBAN** von der Bank eintragen (Einstellungen → Bank & QR-Rechnung) — erst dann
+  erscheint der QR-Zahlteil auf Rechnungen/Mahnungen. Bis dahin: Demo-QR-IBAN im Seed.
+- **Impressum/Datenschutz** mit echten Angaben (Name, Adresse, UID) ersetzen —
+  `apps/web/src/pages/public/Legal.tsx` (oder vom Entwickler anpassen lassen).
+- **SMTP** für den PDF-E-Mail-Versand in die `.env` (`SMTP_HOST`, `SMTP_PORT`,
+  `SMTP_USER`, `SMTP_PASSWORD`, `SMTP_FROM`) und Container neu starten. Ohne SMTP
+  laufen alle Funktionen weiter, Mails werden nur nicht versendet.
+- **AutoScout24-Händlerportal-Link** in den Einstellungen hinterlegen (Klick-Link im
+  Verkauf-Tab; das Einstellen selbst bleibt manuell).
 
 **Keine eigenen Host-Ports.** Das Routing macht das bestehende Traefik/Coolify-Setup:
 `web` hängt im externen Netz `coolify`, Traefik-Labels mit Präfix `mld-`, Zertifikat
@@ -46,7 +75,18 @@ Nach Schema-Änderungen ggf. Seed erneut laufen lassen (überschreibt keine Pass
 
 ```bash
 docker compose -f docker-compose.vps.yml exec -T api npx tsx prisma/seed.ts
+docker compose -f docker-compose.vps.yml exec -T api npx tsx prisma/seed-demo.ts
 ```
+
+Demo-Artefakte zurücksetzen (generierte PDFs/Rechnungen/Zahlungen des Demo-Golfs
+löschen, Verkaufsvorgang bleibt):
+
+```bash
+docker compose -f docker-compose.vps.yml exec -T api npx tsx prisma/clean-demo.ts
+```
+
+Hinweis: Der API-Container arbeitet in `/app/apps/api` — die Prisma-Dateien liegen
+dort relativ unter `prisma/`.
 
 ## Logs / Status
 

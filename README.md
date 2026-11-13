@@ -1,9 +1,26 @@
 # MyLittleCarDealership
 
-Betriebssoftware für freie Occasion-Händler (Schweiz). Dieses Repository enthält
-das **Grundgerüst**: Login, Benutzerverwaltung, Betriebs-Stammdaten, Audit-Log und
-die komplette Infrastruktur (Docker, nginx, Traefik, Backup). Die Fachmodule
-(Fahrzeuge, Kunden, Angebote, Rechnungen …) folgen mit den Spezifikationen.
+Betriebssoftware für freie Occasion-Händler (Schweiz) — die komplette
+Schaltzentrale vom Erstkontakt bis zum Archiv:
+
+- **Öffentliche Seite**: Landing, Fahrzeugbörse (Bestand öffentlich), Ankauffsformular
+  mit Foto-/Fahrzeugausweis-Upload, nDSG-Einwilligung, Honeypot und Rate-Limit,
+  Impressum/Datenschutz
+- **Ankauf**: Posteingang (Web/WhatsApp/E-Mail), Übernehmen mit Kontakt-/Fahrzeug-Anlage,
+  Kalkulation mit Ankaufspreis-Empfehlung (Zielverkaufspreis − Kosten − Zielgewinn),
+  Angebots-/Ankaufsvertrag-PDF, Eintausch-Verrechnung
+- **Aufbereitung**: Aufträge intern / Markenwerkstatt / Partnerwerkstatt / extern /
+  Aufbereiter, Soll/Ist-Rückfluss in die Gewinnprognose, Pipeline-Automatik
+- **Verkauf**: AS24-Vorbereitung (kopierfertig) + Inserat-Link, A3-Tafel mit QR-Code,
+  Anfragen-Protokoll mit WhatsApp/Telefon/E-Mail-Klick-Links, Termine/Kalender,
+  Standtage im Dashboard
+- **Abschluss**: Kaufvertrag-PDF (OR 197/210), Schweizer **QR-Rechnung** (SIX IG 2.3,
+  QR-IBAN + 27-stellige QRR, MWST im Bruttopreis, Abgaben separat), Leasing-Dossier,
+  Zusatzleistungen (Occasionsgarantie …), Zahlungen mit **GwG-Check** (Bar ≥ 100'000),
+  Mahnwesen (Erinnerung + 2 Mahnungen als PDF mit QR-Teil), Gutschrift/Storno,
+  PDF-E-Mail-Versand, Zusammenfassungs-PDF (Archiv 10 Jahre)
+- **Auswertungen**: Umsatz, Bestandswert, Deckungsbeitrag je Fahrzeug,
+  Buchhaltungsexport CSV
 
 Live: **https://mylittlecardealership.aiconso.eu**
 
@@ -44,6 +61,8 @@ Login: `chef@mylittlecardealership.ch` / `changeme`
 | `npm run db:push` | Prisma-Schema anwenden (`prisma db push`) |
 | `npm run db:seed` | Basis-Seed (idempotent, überschreibt keine Passwörter) |
 | `npm run db:studio` | Prisma Studio |
+| `npx tsx prisma/seed-demo.ts` (in `apps/api`) | Demo-Daten (Lokal=VPS identisch) |
+| `npx tsx prisma/clean-demo.ts` (in `apps/api`) | Demo-Artefakte (PDFs/Rechnungen/Zahlungen) zurücksetzen |
 
 ## Demo-Zugänge
 
@@ -68,17 +87,21 @@ deaktiviert oder herabgestuft werden; niemand kann das eigene Konto deaktivieren
 
 ```
 apps/api/          Fastify-Backend
-  prisma/          schema.prisma, seed.ts
+  prisma/          schema.prisma, seed.ts, seed-demo.ts, clean-demo.ts
   src/
     app.ts         Fastify-Setup, CORS, Rate-Limit, Health, Fehlerbehandlung
     env.ts         Env-Validierung (zod)
     plugins/       auth.ts (JWT, Sessions, Rollen)
-    modules/       auth.routes.ts, users.routes.ts, settings.routes.ts
-    lib/           prisma.ts, audit.ts, mailer.ts
+    modules/       Fahrzeuge, Ankauf, Aufbereitung, Verkauf, Rechnungen,
+                   Mahnwesen, Leads, Anfragen, Termine, Öffentliche Seite …
+    lib/           prisma.ts, audit.ts, mailer.ts, pdf.ts, invoicePdf.ts,
+                   qrr.ts, uploads.ts
 apps/web/          React-Frontend
   src/
     components/    ui.tsx (Buttons, Inputs, Modal …), Layout.tsx
-    pages/         Login, Dashboard, Users, Settings, Profile
+    pages/         FahrzeugDetail (Tabs Ankauf/Aufträge/Verkauf/Anfragen/
+                   Termine), Kalender, Posteingang, Auswertungen,
+                   public/ (Landing, Börse, Ankauffsformular, Impressum)
     lib/           api.ts, auth.tsx, types.ts
 docker-compose*.yml
 deploy.sh
@@ -98,5 +121,7 @@ Siehe [DEPLOY.md](DEPLOY.md). Für den Serverbetrieb: `VPS-UEBERGABE.md`.
 
 ## Noch offen
 
-Die Fachmodule kommen mit den Spezifikationen. Aktueller Stand:
+Betreiber-Aufgaben (nicht Code): eigener **QR-IBAN** von der Bank (Einstellungen →
+Bank & QR-Rechnung), AS24-Händlerportal-Link und Impressums-Angaben (Name/UID)
+pflegen, SMTP-Zugang für den PDF-E-Mail-Versand hinterlegen. Aktueller Stand:
 [docs/PROJEKT-STATUS.md](docs/PROJEKT-STATUS.md).
