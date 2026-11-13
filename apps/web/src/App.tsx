@@ -32,7 +32,8 @@ function Protected() {
   return <Layout />;
 }
 
-// Startseite: eingeloggt → interne Schaltzentrale, sonst → öffentliches Landing.
+// Startseite: eingeloggt → Dashboard im internen Layout (mit Sidebar),
+// sonst → öffentliches Landing.
 function HomeRoute() {
   const { user, loading } = useAuth();
   if (loading) {
@@ -42,7 +43,7 @@ function HomeRoute() {
       </div>
     );
   }
-  return user ? <Dashboard /> : <PublicLayout><Landing /></PublicLayout>;
+  return user ? <Layout><Dashboard /></Layout> : <PublicLayout><Landing /></PublicLayout>;
 }
 
 function PublicShell() {

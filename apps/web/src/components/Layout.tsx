@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { NavLink, Outlet } from "react-router-dom";
 import { BarChart3, Car, CarFront, CalendarDays, Inbox, LayoutDashboard, LogOut, Settings, UserRound, Users, UsersRound } from "lucide-react";
 import { useAuth } from "../lib/auth";
@@ -29,7 +30,9 @@ function Brand() {
   );
 }
 
-export default function Layout() {
+// children: erlaubt das Dashboard auf "/" direkt im Layout zu rendern
+// (Route "/" ist öffentlich — ausgeloggt erscheint dort die Landingpage).
+export default function Layout({ children }: { children?: ReactNode }) {
   const { user, logout } = useAuth();
   const initials = user?.name
     ?.split(" ")
@@ -119,7 +122,7 @@ export default function Layout() {
         </header>
 
         <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-6 sm:px-6 lg:px-10 lg:py-10">
-          <Outlet />
+          {children ?? <Outlet />}
         </main>
       </div>
     </div>
