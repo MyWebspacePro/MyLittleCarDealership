@@ -36,6 +36,8 @@ services:
       SMTP_USER: ${SMTP_USER:-}
       SMTP_PASSWORD: ${SMTP_PASSWORD:-}
       SMTP_FROM: ${SMTP_FROM:-MyLittleCarDealership <noreply@example.ch>}
+      UPLOADS_DIR: /app/uploads
+    volumes: [uploads:/app/uploads]
 
   web:
     build: { context: ., dockerfile: apps/web/Dockerfile }
@@ -55,3 +57,4 @@ services:
 
 volumes:
   mld_db_data:
+  uploads:

@@ -39,11 +39,14 @@ async function refreshAccess(): Promise<boolean> {
 }
 
 export async function api<T>(path: string, options: RequestInit = {}, retry = true): Promise<T> {
+  // FormData (Foto-/Dokument-Uploads) setzt den Content-Type selbst —
+  // keinen JSON-Header setzen, sonst bricht der Multipart-Body.
+  const isForm = options.body instanceof FormData;
   const access = getAccessToken();
   const res = await fetch(`/api${path}`, {
     ...options,
     headers: {
-      "Content-Type": "application/json",
+      ...(isForm ? {} : { "Content-Type": "application/json" }),
       ...(access ? { Authorization: `Bearer ${access}` } : {}),
       ...options.headers,
     },
@@ -71,4 +74,26 @@ export async function api<T>(path: string, options: RequestInit = {}, retry = tr
     throw new ApiError(res.status, isJson ? body.error : "Request fehlgeschlagen", isJson ? body.details : undefined);
   }
   return body as T;
+}
+
+/**
+ * Geschützte Datei (z. B. Fahrzeugausweis) laden und als Download auslösen.
+ * Läuft mit Bearer-Token, da /uploads-Dokumente nicht öffentlich sind.
+ */
+export async function apiDownload(path: string, fallbackName: string): Promise<void> {
+  const access = getAccessToken();
+  const res = await fetch(`/api${path}`, {
+    headers: access ? { Authorization: `Bearer ${access}` } : {},
+  });
+  if (res.status === 401 && (await refreshAccess())) {
+    return apiDownload(path, fallbackName);
+  }
+  if (!res.ok) throw new ApiError(res.status, "Download fehlgeschlagen");
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = fallbackName;
+  a.click();
+  URL.revokeObjectURL(url);
 }

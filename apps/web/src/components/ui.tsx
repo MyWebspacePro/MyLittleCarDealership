@@ -127,6 +127,15 @@ export function StatusBadge({ active }: { active: boolean }) {
   );
 }
 
+// Allgemeines Pill-Badge (Pipeline-Status, Typen …). Stil via Tailwind-Klassen.
+export function Badge({ className = "", children }: { className?: string; children: ReactNode }) {
+  return (
+    <span className={`inline-flex items-center whitespace-nowrap rounded-full px-2.5 py-0.5 text-[11px] font-semibold ring-1 ${className}`}>
+      {children}
+    </span>
+  );
+}
+
 export function Alert({ kind = "error", children }: { kind?: "error" | "success" | "info"; children: ReactNode }) {
   const styles = {
     error: "border-rose-200 bg-rose-50 text-rose-800",

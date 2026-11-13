@@ -3,6 +3,9 @@ import Layout from "./components/Layout";
 import { Spinner } from "./components/ui";
 import { useAuth } from "./lib/auth";
 import Dashboard from "./pages/Dashboard";
+import FahrzeugDetail from "./pages/FahrzeugDetail";
+import Fahrzeuge from "./pages/Fahrzeuge";
+import Kunden from "./pages/Kunden";
 import Login from "./pages/Login";
 import Profile from "./pages/Profile";
 import Settings from "./pages/Settings";
@@ -27,6 +30,9 @@ export default function App() {
       <Route path="/login" element={<Login />} />
       <Route element={<Protected />}>
         <Route index element={<Dashboard />} />
+        <Route path="fahrzeuge" element={<Fahrzeuge />} />
+        <Route path="fahrzeuge/:id" element={<FahrzeugDetail />} />
+        <Route path="kunden" element={<Kunden />} />
         <Route path="users" element={<Users />} />
         <Route path="settings" element={<Settings />} />
         <Route path="profile" element={<Profile />} />

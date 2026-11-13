@@ -2,6 +2,7 @@ import Fastify from "fastify";
 import type { FastifyError } from "fastify";
 import cors from "@fastify/cors";
 import cookie from "@fastify/cookie";
+import multipart from "@fastify/multipart";
 import rateLimit from "@fastify/rate-limit";
 import { Prisma } from "@prisma/client";
 import { ZodError } from "zod";
@@ -9,6 +10,10 @@ import { env } from "./env.js";
 import { authRoutes } from "./modules/auth.routes.js";
 import { userRoutes } from "./modules/users.routes.js";
 import { settingsRoutes } from "./modules/settings.routes.js";
+import { contactRoutes } from "./modules/contacts.routes.js";
+import { vehicleRoutes } from "./modules/vehicles.routes.js";
+import { purchaseRoutes } from "./modules/purchases.routes.js";
+import { mediaRoutes } from "./modules/media.routes.js";
 
 export async function buildApp() {
   const app = Fastify({
@@ -27,6 +32,11 @@ export async function buildApp() {
 
   // Refresh-Token liegt in einem httpOnly-Cookie -> braucht Cookie-Parsing.
   await app.register(cookie);
+
+  // Foto-/Dokument-Uploads (ein File pro Request; bodyLimit oben deckt 8 MB
+  // pro Datei ab). Multipart-Errors (zu gross, falscher Typ) laufen in den
+  // zentralen Error-Handler.
+  await app.register(multipart, { limits: { files: 1, fileSize: 8 * 1024 * 1024 } });
 
   const corsOrigins = env.CORS_ORIGINS.split(",")
     .map((o) => o.trim())
@@ -68,9 +78,15 @@ export async function buildApp() {
     return reply.code(status).send({ error: err.message || "Fehler" });
   });
 
+  // Öffentliche Foto-Auslieferung (kein Login; ohne /api-Präfix, weil nginx
+  // /uploads/ direkt hierher weiterleitet).
+  await app.register(mediaRoutes);
   await app.register(authRoutes, { prefix: "/api/auth" });
   await app.register(userRoutes, { prefix: "/api" });
   await app.register(settingsRoutes, { prefix: "/api" });
+  await app.register(contactRoutes, { prefix: "/api" });
+  await app.register(vehicleRoutes, { prefix: "/api" });
+  await app.register(purchaseRoutes, { prefix: "/api" });
 
   return app;
 }

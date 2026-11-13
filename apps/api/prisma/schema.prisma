@@ -1,8 +1,10 @@
 // MyLittleCarDealership — Prisma Schema
-// Nur Core: Benutzer, Sitzungen, Händler-Stammdaten, Audit-Log.
-// Die Fachmodule (Fahrzeuge, Kunden, Angebote, Rechnungen …) kommen mit den
-// Spezifikationen dazu. Schema-Änderungen laufen über "prisma db push",
-// es gibt bewusst kein migrations-Verzeichnis.
+// Core (Benutzer, Sitzungen, Stammdaten, Audit-Log) plus Fachmodule der
+// Schaltzentrale: Kunden, Fahrzeuge, Ankauf/Kalkulation, Aufbereitung,
+// Verkauf, Anfragen, Termine, Zahlungen, Rechnungen, Dokumente.
+// Schema-Änderungen laufen über "prisma db push", es gibt bewusst kein
+// migrations-Verzeichnis. Tabellen, die erst in späteren Phasen befüllt
+// werden (SaleAddon, Payment, Invoice, GeneratedDocument), stehen schon bereit.
 
 generator client {
   provider = "prisma-client-js"
@@ -18,6 +20,8 @@ enum Role {
   SALES   // Verkauf/Berater
   FINANCE // Buchhaltung
 }
+
+// ── Core ─────────────────────────────────────────────────────────────────────
 
 model User {
   id           String   @id @default(cuid())
@@ -69,6 +73,14 @@ model Setting {
   vatRateReduced   Decimal  @default(2.6) @db.Decimal(5, 2)
   iban             String   @default("")
   bankName         String   @default("")
+  // QR-Rechnung (SIX-Standard): QR-IBAN + laufende Nummer für die
+  // 27-stellige QR-Referenz. Wird erst mit Phase E (Rechnung) genutzt.
+  qrIban           String   @default("")
+  qrrCounter       Int      @default(1)
+  as24PortalUrl    String   @default("") // AutoScout24-Händlerportal
+  // Standard-Zielgewinn pro Fahrzeug (CHF) für die Ankaufsempfehlung.
+  targetProfitDefault Decimal @default(0) @db.Decimal(12, 2)
+  warrantyText     String   @default("") // Gewährleistungs-Standardtext für Verträge
   paymentDays      Int      @default(30)
   updatedAt        DateTime @updatedAt
 }
@@ -87,4 +99,447 @@ model AuditLog {
   @@index([userId])
   @@index([entity, entityId])
   @@index([createdAt])
+}
+
+// ── Fachmodule ───────────────────────────────────────────────────────────────
+
+// Kunden und Interessenten: Privatpersonen und Firmen. Ein Kontakt kann
+// mehrere Fahrzeuge kaufen (Mehrfachkäufe) und gleichzeitig Verkäufer sein.
+enum ContactType {
+  PRIVAT
+  FIRMA
+}
+
+model Contact {
+  id          String      @id @default(cuid())
+  type        ContactType @default(PRIVAT)
+  firstName   String?
+  lastName    String?
+  companyName String? // nur FIRMA
+  email       String?
+  phone       String?
+  mobile      String?
+  street      String?
+  zip         String?
+  city        String?
+  notes       String? @db.Text
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  purchasesAsSeller PurchaseDeal[]
+  salesAsBuyer      SaleDeal[]
+  inquiries         Inquiry[]
+  appointments      Appointment[]
+
+  @@index([lastName])
+  @@index([companyName])
+}
+
+// Lebenszyklus eines Fahrzeugs, von der Ankaufsanfrage bis zum Archiv.
+enum VehicleStatus {
+  ANGEFRAGT     // Erstkontakt, noch nicht bewertet
+  KALKULATION   // wird bewertet / kalkuliert
+  ANGEBOT       // Ankaufsangebot versendet (bei Eintausch: Verhandlungsphase)
+  GEKAUFT       // angekauft, wartet auf Übergabe/Auftragseingang
+  AUFBEREITUNG  // Reparatur, Service, MFK, Aufbereitung laufen
+  VERKAUF       // Exposé fertig, AS24-Inserat online, Anfragen kommen
+  VERKAUFT      // verkauft, Abwicklung läuft (Vertrag, Rechnung, Zahlung)
+  ABGESCHLOSSEN // vollständig abgewickelt, PDF-Zusammenfassung archiviert
+  ABGELEHNT     // Ankauf abgelehnt
+}
+
+model Vehicle {
+  id                String        @id @default(cuid())
+  status            VehicleStatus @default(ANGEFRAGT)
+  // Seit wann liegt das Fahrzeug im aktuellen Status (Standtage)?
+  statusChangedAt   DateTime      @default(now())
+  make              String
+  model             String
+  variant           String? // Typ/Bezeichnung, z. B. "2.0 TDI Sportline"
+  chassisNumber     String? @unique // Stammnummer / CHID
+  firstRegistration DateTime?
+  mileageKm         Int?
+  fuel              String?
+  transmission      String?
+  color             String?
+  plates            String?
+  mfkUntil          DateTime?
+  hasServiceBook    Boolean       @default(false)
+  targetSalePrice   Decimal? @db.Decimal(12, 2)
+  description       String? @db.Text
+  as24Url           String?
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+
+  photos             VehiclePhoto[]
+  documents          VehicleDocument[]
+  purchase           PurchaseDeal?
+  sale               SaleDeal?
+  workOrders         WorkOrder[]
+  inquiries          Inquiry[]
+  appointments       Appointment[]
+  generatedDocuments GeneratedDocument[]
+
+  @@index([status])
+  @@index([make, model])
+}
+
+model VehiclePhoto {
+  id           String   @id @default(cuid())
+  vehicle      Vehicle  @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  vehicleId    String
+  filename     String @unique // Datei im Uploads-Ordner (öffentlich ausgeliefert)
+  originalName String?
+  sortOrder    Int      @default(0)
+  caption      String?
+  createdAt    DateTime @default(now())
+
+  @@index([vehicleId])
+}
+
+// Verwaltungs-Dokumente (Fahrzeugausweis, Serviceheft, Zustandsberichte).
+// Ausgeliefert nur über authentifizierte Route, nie öffentlich.
+enum DocumentKind {
+  FAHRZEUGAUSWEIS
+  SERVICEHEFT
+  BERICHT
+  SONSTIGES
+}
+
+model VehicleDocument {
+  id           String       @id @default(cuid())
+  vehicle      Vehicle      @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  vehicleId    String
+  kind         DocumentKind @default(SONSTIGES)
+  filename     String @unique
+  originalName String?
+  createdAt    DateTime     @default(now())
+
+  @@index([vehicleId])
+}
+
+// Ankaufsvorgang: vom Lead (Erstkontakt) bis zur Übernahme.
+enum PurchaseChannel {
+  WEBFORM      // Ankaufsformular auf der Website
+  WHATSAPP
+  EMAIL
+  TELEFON
+  PERSOENLICH
+  AUTOSCOUT24
+  SONSTIGE
+}
+
+enum PurchaseStatus {
+  LEAD              // Erstkontakt erfasst
+  KALKULIERT        // Kalkulation fertig
+  ANGEBOT_ERSTELLT  // schriftliches Angebot als PDF versendet
+  ANGEBOT_ANGENOMMEN
+  ABGESCHLOSSEN     // angekauft, Fahrzeug übernommen
+  ABGELEHNT
+}
+
+enum PurchasePaymentMethod {
+  BAR
+  UEBERWEISUNG
+  EINTAUSCH // Verrechnung mit einem eigenen Verkaufsvorgang
+}
+
+model PurchaseDeal {
+  id              String                 @id @default(cuid())
+  vehicle         Vehicle                @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  vehicleId       String                 @unique
+  seller          Contact?               @relation(fields: [sellerId], references: [id], onDelete: SetNull)
+  sellerId        String?
+  status          PurchaseStatus         @default(LEAD)
+  channel         PurchaseChannel        @default(TELEFON)
+  purchasePrice   Decimal? @db.Decimal(12, 2) // effektiver Ankaufspreis
+  // System-Empfehlung: Zielverkaufspreis − Kalkulationskosten − Zielgewinn.
+  recommendedPrice Decimal? @db.Decimal(12, 2)
+  targetProfit    Decimal? @db.Decimal(12, 2) // Zielgewinn (sonst Setting-Default)
+  estimatedSalePrice Decimal? @db.Decimal(12, 2) // Zielverkaufspreis (AS24-Vergleich)
+  paymentMethod   PurchasePaymentMethod  @default(UEBERWEISUNG)
+  paymentDueDate  DateTime?
+  purchasedAt     DateTime?
+  notes           String? @db.Text
+  createdAt       DateTime               @default(now())
+  updatedAt       DateTime               @updatedAt
+
+  valuationItems ValuationItem[]
+  payments       Payment[]
+
+  @@index([sellerId])
+  @@index([status])
+}
+
+// Kalkulationspositionen: erwartete Kosten bis zum verkaufsbereiten Fahrzeug.
+enum ValuationKind {
+  AUFBEREITUNG
+  REPARATUR
+  SERVICE
+  SONSTIGES
+}
+
+model ValuationItem {
+  id             String       @id @default(cuid())
+  purchaseDeal   PurchaseDeal @relation(fields: [purchaseDealId], references: [id], onDelete: Cascade)
+  purchaseDealId String
+  kind           ValuationKind @default(REPARATUR)
+  description    String
+  amount         Decimal      @db.Decimal(10, 2)
+}
+
+// Verkaufsvorgang: vom Interessenten bis zur vollständigen Abwicklung.
+enum SalePaymentMethod {
+  BAR
+  UEBERWEISUNG
+  LEASING
+  FINANZIERUNG
+}
+
+enum SaleStatus {
+  INTERESSENT
+  RESERVIERT
+  VERKAUFT
+  ABGESCHLOSSEN
+}
+
+model SaleDeal {
+  id             String            @id @default(cuid())
+  vehicle        Vehicle           @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  vehicleId      String            @unique
+  buyer          Contact?          @relation(fields: [buyerId], references: [id], onDelete: SetNull)
+  buyerId        String?
+  status         SaleStatus        @default(INTERESSENT)
+  salePrice      Decimal? @db.Decimal(12, 2)
+  paymentMethod  SalePaymentMethod @default(UEBERWEISUNG)
+  leasingPartner String?
+  soldAt         DateTime?
+  notes          String? @db.Text
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+
+  addons   SaleAddon[]
+  payments Payment[]
+  invoices Invoice[]
+
+  @@index([buyerId])
+  @@index([status])
+}
+
+// Zusatzleistungen beim Verkauf (Occasionsgarantie, Versicherung, Pneus …).
+model SaleAddon {
+  id        String    @id @default(cuid())
+  saleDeal  SaleDeal  @relation(fields: [saleDealId], references: [id], onDelete: Cascade)
+  saleDealId String
+  name      String
+  provider  String?
+  price     Decimal? @db.Decimal(10, 2)
+  createdAt DateTime  @default(now())
+}
+
+// Aufträge während der Aufbereitungsphase. Der Anbieter-Typ bildet die
+// Praxis ab: intern, Markenwerkstatt (Reset/Service), Partnerwerkstatt
+// (Anmeldung nötig), externer Anbieter (z. B. Dellen-Spezialist kommt
+// vorbei), Aufbereiter (intern oder extern je nach Kapazität).
+enum WorkOrderType {
+  REPARATUR
+  SERVICE
+  AUFBEREITUNG
+  MFK
+  SONSTIGES
+}
+
+enum ProviderType {
+  INTERN
+  MARKENWERKSTATT
+  PARTNERWERKSTATT
+  EXTERN
+  AUFBEREITER
+}
+
+enum WorkOrderStatus {
+  GEPLANT
+  IN_ARBEIT
+  FERTIG
+  ABGESCHLOSSEN
+}
+
+model Provider {
+  id           String       @id @default(cuid())
+  name         String
+  providerType ProviderType @default(PARTNERWERKSTATT)
+  phone        String?
+  email        String?
+  notes        String?
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  workOrders WorkOrder[]
+}
+
+model WorkOrder {
+  id             String           @id @default(cuid())
+  vehicle        Vehicle          @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  vehicleId      String
+  type           WorkOrderType    @default(REPARATUR)
+  providerType   ProviderType     @default(PARTNERWERKSTATT)
+  provider       Provider?        @relation(fields: [providerId], references: [id], onDelete: SetNull)
+  providerId     String?
+  providerName   String? // Snapshot, falls kein Provider-Eintrag gewünscht
+  description    String
+  status         WorkOrderStatus  @default(GEPLANT)
+  costEstimate   Decimal? @db.Decimal(10, 2)
+  costActual     Decimal? @db.Decimal(10, 2)
+  plannedFor     DateTime?
+  completedAt    DateTime?
+  notes          String? @db.Text
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  @@index([vehicleId])
+  @@index([status])
+}
+
+// Anfragen zum Verkaufsfahrzeug (Telefon, WhatsApp, E-Mail, AutoScout24 …).
+// Kanal bleibt manuell protokolliert (Phase-D-Entscheidung); Klick-Links
+// (wa.me / mailto) erzeugt das Frontend.
+enum InquiryChannel {
+  TELEFON
+  WHATSAPP
+  EMAIL
+  AUTOSCOUT24
+  WEBFORM
+  PERSOENLICH
+  SONSTIGE
+}
+
+model Inquiry {
+  id              String         @id @default(cuid())
+  vehicle         Vehicle?       @relation(fields: [vehicleId], references: [id], onDelete: SetNull)
+  vehicleId       String?
+  contact         Contact?       @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  contactId       String?
+  channel         InquiryChannel @default(TELEFON)
+  subject         String?
+  summary         String? @db.Text // Verlauf/Vereinbarung, "mit wem was ausgemacht"
+  nextFollowUpAt  DateTime?
+  resolvedAt      DateTime?
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  @@index([vehicleId])
+  @@index([contactId])
+  @@index([nextFollowUpAt])
+}
+
+// Termine: Besichtigungen, Probefahrten, Rückrufe, Werkstatt-Termine.
+enum AppointmentType {
+  BESICHTIGUNG
+  PROBEFAHRT
+  RUECKRUF
+  WERKSTATT
+  SONSTIGES
+}
+
+enum AppointmentStatus {
+  GEPLANT
+  ERLEDIGT
+  ABGESAGT
+}
+
+model Appointment {
+  id        String            @id @default(cuid())
+  vehicle   Vehicle?          @relation(fields: [vehicleId], references: [id], onDelete: SetNull)
+  vehicleId String?
+  contact   Contact?          @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  contactId String?
+  type      AppointmentType   @default(BESICHTIGUNG)
+  title     String
+  startsAt  DateTime
+  endsAt    DateTime?
+  status    AppointmentStatus @default(GEPLANT)
+  notes     String? @db.Text
+  createdAt DateTime          @default(now())
+  updatedAt DateTime          @updatedAt
+
+  @@index([vehicleId])
+  @@index([contactId])
+  @@index([startsAt])
+}
+
+enum PaymentDirection {
+  EINGANG // Kunden-/Käufer-Zahlung
+  AUSGANG // Auszahlung an Verkäufer, Werkstattkosten …
+}
+
+model Payment {
+  id             String           @id @default(cuid())
+  direction      PaymentDirection @default(EINGANG)
+  saleDeal       SaleDeal?        @relation(fields: [saleDealId], references: [id], onDelete: SetNull)
+  saleDealId     String?
+  purchaseDeal   PurchaseDeal?    @relation(fields: [purchaseDealId], references: [id], onDelete: SetNull)
+  purchaseDealId String?
+  amount         Decimal          @db.Decimal(12, 2)
+  method         String? // BAR / UEBERWEISUNG / LEASING-AUSZAHLUNG …
+  paidAt         DateTime         @default(now())
+  notes          String?
+  createdAt      DateTime         @default(now())
+
+  @@index([saleDealId])
+  @@index([purchaseDealId])
+}
+
+// Rechnungen inkl. Schweizer QR-Rechnung (Phase E). Die QR-Referenz (27
+// Stellen) wird aus dem QRR-Zähler in den Stammdaten erzeugt.
+enum InvoiceStatus {
+  ENTWURF
+  VERSANDT
+  TEILZAHLUNG
+  BEZAHLT
+  STORNIERT
+}
+
+model Invoice {
+  id          String        @id @default(cuid())
+  number      String        @unique // z. B. 2026-014
+  saleDeal    SaleDeal?     @relation(fields: [saleDealId], references: [id], onDelete: SetNull)
+  saleDealId  String?
+  status      InvoiceStatus @default(ENTWURF)
+  netAmount   Decimal? @db.Decimal(12, 2)
+  vatRate     Decimal? @db.Decimal(5, 2)
+  vatAmount   Decimal? @db.Decimal(12, 2)
+  totalAmount Decimal? @db.Decimal(12, 2)
+  issuedAt    DateTime?
+  dueAt       DateTime?
+  qrReference String?
+  pdfPath     String?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  @@index([saleDealId])
+  @@index([status])
+}
+
+// PDF-Artefakte (Angebots-PDF, Ankaufsvertrag, Kaufvertrag, Rechnung,
+// A3-Tafel, Verkaufszusammenfassung) — Basis für das Offline-Archiv.
+enum DocumentType {
+  ANKAUF_ANGEBOT
+  ANKAUF_VERTRAG
+  KAUFVERTRAG
+  RECHNUNG
+  TAFAEL
+  ZUSAMMENFASSUNG
+  SONSTIGES
+}
+
+model GeneratedDocument {
+  id           String            @id @default(cuid())
+  vehicle      Vehicle?          @relation(fields: [vehicleId], references: [id], onDelete: SetNull)
+  vehicleId    String?
+  documentType DocumentType      @default(SONSTIGES)
+  title        String
+  filePath     String
+  createdAt    DateTime          @default(now())
+
+  @@index([vehicleId])
 }

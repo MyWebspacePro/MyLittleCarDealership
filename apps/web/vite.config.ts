@@ -9,6 +9,7 @@ export default defineConfig({
     // Im Container uebernimmt nginx den Proxy; lokal leitet Vite direkt an die API.
     proxy: {
       "/api": "http://localhost:3001",
+      "/uploads": "http://localhost:3001",
     },
   },
 });
