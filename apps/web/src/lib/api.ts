@@ -117,3 +117,18 @@ export async function apiDownload(path: string, fallbackName: string): Promise<v
   a.click();
   URL.revokeObjectURL(url);
 }
+/**
+ * Geschützte Datei als Blob laden (für die In-App-Ansicht in einem Modal).
+ * 401 löst wie api() einen Refresh + Retry aus.
+ */
+export async function apiBlob(path: string): Promise<Blob> {
+  const access = getAccessToken();
+  const res = await fetch(`/api${path}`, {
+    headers: access ? { Authorization: `Bearer ${access}` } : {},
+  });
+  if (res.status === 401 && (await refreshAccess())) {
+    return apiBlob(path);
+  }
+  if (!res.ok) throw new ApiError(res.status, "Dokument konnte nicht geladen werden");
+  return res.blob();
+}

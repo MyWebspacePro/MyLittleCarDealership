@@ -622,6 +622,7 @@ export async function vehicleRoutes(app: FastifyInstance): Promise<void> {
 
   app.get("/vehicles/:id/documents/:docId", { preHandler: authGuard }, async (req, reply) => {
     const { id, docId } = z.object({ id: z.string().min(1), docId: z.string().min(1) }).parse(req.params);
+    const { inline } = z.object({ inline: z.coerce.boolean().default(false) }).parse(req.query);
     const doc = await prisma.vehicleDocument.findFirst({ where: { id: docId, vehicleId: id } });
     if (!doc) return reply.code(404).send({ error: "Dokument nicht gefunden" });
     const full = path.join(DOCS_DIR, doc.filename);
@@ -630,7 +631,11 @@ export async function vehicleRoutes(app: FastifyInstance): Promise<void> {
     }
     reply.header("Content-Type", mimeForFilename(doc.filename) ?? "application/octet-stream");
     const name = doc.originalName ?? doc.filename;
-    reply.header("Content-Disposition", `attachment; filename*=UTF-8''${encodeURIComponent(name)}`);
+    // inline=true: Browser zeigt PDF/Bild direkt an (Ansehen); sonst Download.
+    reply.header(
+      "Content-Disposition",
+      `${inline ? "inline" : "attachment"}; filename*=UTF-8''${encodeURIComponent(name)}`,
+    );
     return reply.send(createReadStream(full));
   });
 

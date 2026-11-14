@@ -26,7 +26,7 @@ import {
   Trash2,
   Upload,
 } from "lucide-react";
-import { api, apiDownload } from "../lib/api";
+import { api, apiDownload, apiBlob } from "../lib/api";
 import {
   chf,
   formatDate,
@@ -237,6 +237,7 @@ export default function FahrzeugDetail() {
   const [docKind, setDocKind] = useState<DocumentKind>("SONSTIGES");
   const [docStatus, setDocStatus] = useState<{ kind: "ok" | "error" | "loading"; text: string } | null>(null);
   const docInputRef = useRef<HTMLInputElement>(null);
+  const [docView, setDocView] = useState<{ name: string; url: string; mime: string } | null>(null);
   const [woModalOpen, setWoModalOpen] = useState(false);
   const [woEditing, setWoEditing] = useState<WorkOrder | null>(null);
   const [woForm, setWoForm] = useState<WorkOrderForm>(emptyWorkOrderForm());
@@ -1045,16 +1046,47 @@ export default function FahrzeugDetail() {
                 </div>
               }
             />
+            {docStatus ? (
+              <div
+                className={`mx-5 mt-3 rounded-lg px-3 py-2 text-xs font-medium ${
+                  docStatus.kind === "ok"
+                    ? "bg-emerald-50 text-emerald-700"
+                    : docStatus.kind === "error"
+                      ? "bg-rose-50 text-rose-700"
+                      : "bg-slate-50 text-slate-600"
+                }`}
+              >
+                {docStatus.text || "Upload läuft …"}
+              </div>
+            ) : null}
             <div className="divide-y divide-slate-100 px-5 py-2">
               {vehicle.documents.length === 0 ? (
-                <p className="py-6 text-center text-sm text-slate-500">Noch keine Dokumente (JPG, PDF, Word, Excel … — max. 8 MB).</p>
+                <p className="py-6 text-center text-sm text-slate-500">Noch keine Dokumente (JPG oder PDF, max. 8 MB).</p>
               ) : (
                 vehicle.documents.map((doc) => (
                   <div key={doc.id} className="flex items-center justify-between gap-3 py-2.5">
                     <div className="min-w-0">
                       <div className="flex items-center gap-2">
                         <Badge className="bg-slate-100 text-slate-600 ring-slate-200">{DOCUMENT_KIND_LABELS[doc.kind]}</Badge>
-                        <p className="truncate text-sm text-slate-700">{doc.originalName ?? doc.filename}</p>
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            try {
+                              const blob = await apiBlob(`/vehicles/${id}/documents/${doc.id}?inline=1`);
+                              setDocView({
+                                name: doc.originalName ?? doc.filename,
+                                url: URL.createObjectURL(blob),
+                                mime: blob.type,
+                              });
+                            } catch (err) {
+                              setPageError((err as Error).message);
+                            }
+                          }}
+                          title="Dokument ansehen"
+                          className="truncate text-sm font-medium text-slate-800 hover:text-amber-700 hover:underline"
+                        >
+                          {doc.originalName ?? doc.filename}
+                        </button>
                       </div>
                       <p className="mt-0.5 text-[11px] text-slate-400">{formatDate(doc.createdAt)}</p>
                     </div>
@@ -2592,6 +2624,28 @@ export default function FahrzeugDetail() {
             </Button>
           </div>
         </form>
+      </Modal>
+
+      {/* Dokument ansehen (in der App, kein Popup) */}
+      <Modal
+        open={docView != null}
+        title={docView?.name ?? "Dokument"}
+        description="Vorschau — über das Download-Symbol in der Liste kannst du die Datei speichern."
+        onClose={() => {
+          if (docView) URL.revokeObjectURL(docView.url);
+          setDocView(null);
+        }}
+        wide
+      >
+        {docView ? (
+          docView.mime.startsWith("image/") ? (
+            <div className="max-h-[70vh] overflow-auto text-center">
+              <img src={docView.url} alt={docView.name} className="mx-auto max-w-full rounded-lg" />
+            </div>
+          ) : (
+            <iframe src={docView.url} title={docView.name} className="h-[70vh] w-full rounded-lg border border-slate-200" />
+          )
+        ) : null}
       </Modal>
 
       {/* Verkaufsvorgang erfassen / bearbeiten */}
