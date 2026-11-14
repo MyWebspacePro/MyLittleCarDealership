@@ -588,20 +588,22 @@ export async function vehicleRoutes(app: FastifyInstance): Promise<void> {
     if (!vehicle) return reply.code(404).send({ error: "Fahrzeug nicht gefunden" });
 
     let kind: string = "SONSTIGES";
-    let filePart: import("@fastify/multipart").MultipartFile | undefined;
+    // Wichtig: Datei-Parts IMMER sofort in der Schleife einlesen (toBuffer),
+    // sonst hält Busboy den Stream an und der Upload hängt bei Dateien
+    // grösser ~1 MB endlos (Deadlock zwischen Client und Server).
+    let upload: { buffer: Buffer; mimetype: string; filename: string } | null = null;
     for await (const part of req.parts()) {
       if (part.type === "file") {
-        filePart = part;
+        upload = { buffer: await part.toBuffer(), mimetype: part.mimetype, filename: part.filename ?? "datei" };
       } else if (part.fieldname === "kind") {
         kind = String(part.value);
       }
     }
-    if (!filePart) return reply.code(400).send({ error: "Keine Datei erhalten" });
+    if (!upload) return reply.code(400).send({ error: "Keine Datei erhalten" });
     const parsedKind = z.enum(DOCUMENT_KINDS).safeParse(kind);
-    const buffer = await filePart.toBuffer();
     let filename: string;
     try {
-      filename = await saveUpload(DOCS_DIR, buffer, filePart.mimetype);
+      filename = await saveUpload(DOCS_DIR, upload.buffer, upload.mimetype);
     } catch (err) {
       if (err instanceof UploadError) return reply.code(400).send({ error: err.message });
       throw err;
@@ -611,7 +613,7 @@ export async function vehicleRoutes(app: FastifyInstance): Promise<void> {
         vehicleId: id,
         kind: parsedKind.success ? parsedKind.data : "SONSTIGES",
         filename,
-        originalName: sanitizeOriginalName(filePart.filename),
+        originalName: sanitizeOriginalName(upload.filename),
       },
     });
     await audit(req.user!.id, "UPLOAD", "VehicleDocument", doc.id, { vehicleId: id, kind: doc.kind });

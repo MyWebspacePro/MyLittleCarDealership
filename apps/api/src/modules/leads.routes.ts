@@ -188,24 +188,28 @@ export async function leadRoutes(app: FastifyInstance): Promise<void> {
     const lead = await prisma.purchaseLead.findUnique({ where: { id }, select: { id: true } });
     if (!lead) return reply.code(404).send({ error: "Anfrage nicht gefunden" });
     let kind: string = "FOTO";
-    let filePart: import("@fastify/multipart").MultipartFile | undefined;
+    // Datei-Parts sofort einlesen — sonst Deadlock bei Dateien > ~1 MB
+    // (Busboy stoppt den Stream, die Schleife wartet auf das nächste Part).
+    let upload: { buffer: Buffer; mimetype: string; filename: string } | null = null;
     for await (const part of req.parts()) {
-      if (part.type === "file") filePart = part;
-      else if (part.fieldname === "kind") kind = String(part.value);
+      if (part.type === "file") {
+        upload = { buffer: await part.toBuffer(), mimetype: part.mimetype, filename: part.filename ?? "datei" };
+      } else if (part.fieldname === "kind") {
+        kind = String(part.value);
+      }
     }
-    if (!filePart) return reply.code(400).send({ error: "Keine Datei erhalten" });
+    if (!upload) return reply.code(400).send({ error: "Keine Datei erhalten" });
     const parsedKind = z.enum(LEAD_FILE_KINDS).safeParse(kind);
     const fileKind = parsedKind.success ? parsedKind.data : "FOTO";
-    const buffer = await filePart.toBuffer();
     let filename: string;
     try {
-      filename = await saveUpload(fileKind === "FOTO" ? LEADS_PHOTOS_DIR : LEADS_DOCS_DIR, buffer, filePart.mimetype);
+      filename = await saveUpload(fileKind === "FOTO" ? LEADS_PHOTOS_DIR : LEADS_DOCS_DIR, upload.buffer, upload.mimetype);
     } catch (err) {
       if (err instanceof UploadError) return reply.code(400).send({ error: err.message });
       throw err;
     }
     const file = await prisma.leadFile.create({
-      data: { leadId: id, kind: fileKind, filename, originalName: sanitizeOriginalName(filePart.filename) },
+      data: { leadId: id, kind: fileKind, filename, originalName: sanitizeOriginalName(upload.filename) },
     });
     await audit(req.user!.id, "UPLOAD", "LeadFile", file.id, { leadId: id, kind: fileKind });
     return reply.code(201).send(file);

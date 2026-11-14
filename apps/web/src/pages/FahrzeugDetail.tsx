@@ -1021,7 +1021,7 @@ export default function FahrzeugDetail() {
                   <button
                     type="button"
                     onClick={() => docInputRef.current?.click()}
-                    className="inline-flex items-center gap-2 rounded-lg bg-slate-900 px-3 py-2 text-xs font-medium text-white hover:bg-slate-800"
+                    className="inline-flex shrink-0 items-center gap-2 whitespace-nowrap rounded-lg bg-slate-900 px-3 py-2 text-xs font-medium text-white hover:bg-slate-800"
                   >
                     <Upload size={14} /> {docStatus?.kind === "loading" ? "Lädt hoch …" : "Dokument hochladen"}
                   </button>
